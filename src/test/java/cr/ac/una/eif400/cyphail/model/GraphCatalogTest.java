@@ -8,7 +8,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for the fake graph catalog used during Cyphail Sprint P1.1.
+ * Tests for the fake graph catalog used by Cyphail.
+ *
+ * During Sprint P1, graph information is loaded from the
+ * data/graphs.json file stored on disk instead of being wired
+ * directly in Java.
+ *
+ * These tests verify that the graph catalog behavior from Sprint P1.1
+ * is preserved after the migration to disk-based JSON data.
  *
  * Project: Cyphail
  * Course: EIF400 - Paradigmas de Programacion
@@ -34,8 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class GraphCatalogTest {
 
     /**
-     * Verifies that the graph catalog contains the graphs required
-     * for the Sprint P1.1 demonstration.
+     * Verifies that the graph catalog loaded from JSON contains
+     * the graphs required for the Sprint P1.1 demonstration.
      */
     @Test
     void shouldContainRequiredGraphs() {
@@ -51,7 +58,8 @@ class GraphCatalogTest {
     }
 
     /**
-     * Verifies that an existing graph can be found by name.
+     * Verifies that an existing graph loaded from JSON can be
+     * found by name.
      */
     @Test
     void shouldFindAvailableGraphByName() {
@@ -59,7 +67,7 @@ class GraphCatalogTest {
     }
 
     /**
-     * Verifies that graph lookup is case insensitive.
+     * Verifies that graph lookup remains case insensitive.
      */
     @Test
     void shouldFindGraphIgnoringCase() {
@@ -67,7 +75,7 @@ class GraphCatalogTest {
     }
 
     /**
-     * Verifies that a graph not registered in the fake catalog
+     * Verifies that a graph not present in the JSON catalog
      * is reported as unavailable.
      */
     @Test

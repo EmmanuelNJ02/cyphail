@@ -8,11 +8,15 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Handles fake MATCH queries during Cyphail Sprint P1.1.
+ * Handles the fake MATCH query results preserved from Cyphail Sprint P1.1.
  *
- * No lexer, parser, AST or Prolog execution is performed in this sprint.
- * Supported queries are matched against the wired examples stored in
- * FakeQueryEngine.
+ * During Sprint P1, the compiler includes lexer, parser and AST support
+ * in separate components. This handler preserves the P1.1 fake execution
+ * path so the original demonstration queries continue to produce tabular
+ * results.
+ *
+ * Supported fake queries are resolved through {@link FakeQueryEngine},
+ * which obtains their data from JSON documents stored on disk.
  *
  * Project: Cyphail
  * Course: EIF400 - Paradigmas de Programacion
@@ -53,7 +57,8 @@ public class FakeQueryHandler implements CommandHandler {
     }
 
     /**
-     * Executes a wired fake query and prints its tabular result.
+     * Executes a fake query using data loaded from disk and prints
+     * its tabular result.
      *
      * @param input query entered in the REPL
      * @return true because the REPL should continue running
