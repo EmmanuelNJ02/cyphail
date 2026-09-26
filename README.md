@@ -1,990 +1,732 @@
 # Cyphail
 
+Cyphail is an experimental graph query language prototype developed for the course **EIF400 - Paradigmas de Programacion** at the **Universidad Nacional de Costa Rica (UNA), Escuela de Informatica**.
 
+This repository contains the implementation developed for **Cyphail Sprint P1**.
 
-Cyphail is an experimental graph query language prototype developed for the course **EIF400 - Paradigmas de Programación** at the **Universidad Nacional de Costa Rica (UNA), Escuela de Informática**.
-
-
-
-This repository contains the implementation developed for **Cyphail Sprint P1.1**.
-
-
+---
 
 ## Project Information
 
-
-
 - **Project:** Cyphail
-
 - **Version:** 0.1.0
-
-- **Course:** EIF400 - Paradigmas de Programación
-
+- **Course:** EIF400 - Paradigmas de Programacion
 - **University:** Universidad Nacional de Costa Rica
-
-- **School:** Escuela de Informática
-
+- **School:** Escuela de Informatica
 - **Work Group:** 04
-
 - **Schedule:** 10:00 a.m.
-
 - **Group Code:** 04-10am
+- **Sprint:** P1
+- **Date:** September 2026
 
-- **Sprint:** P1.1
-
-- **Date:** August 2026
-
-
+---
 
 ## Team Members
 
-
-
-- Emmanuel Núñez Jiménez
-
+- Emmanuel Nunez Jimenez
 - Valery Alfaro Morales
-
 - Roy Arias Mejia
-
 - Keynell Molina Mora
-
 - Julissa Solano Valverde
 
+---
 
+## Sprint P1 Scope
 
-## Sprint P1.1 Scope
-
-
-
-Sprint P1.1 provides the initial project setup and a functional command-line REPL for Cyphail.
-
-
+Sprint P1 extends the initial P1.1 project setup with lexical analysis,
+parsing, Abstract Syntax Tree generation, semantic validation and AST
+visualization through the Cyphail REPL.
 
 The current implementation includes:
 
-
-
 - Structured Java project using Maven.
-
 - Java 26 compatibility.
-
 - Command-line interface implemented with picocli.
-
 - Interactive Cyphail REPL.
-
 - `.help` command.
-
 - `.about` command.
-
 - `.exit` command.
-
 - `.use` command.
-
 - `.use <graph>` command.
-
+- `.tree` multiline AST query mode.
+- `.tree <query>` inline AST query mode.
+- Cyphail lexer.
+- Functional parser combinators implemented in Java.
+- Cyphail parser.
+- Abstract Syntax Tree (AST) model.
+- AST visitor and pretty-printer.
+- Basic semantic analysis.
+- Undefined-variable validation.
+- Support for the official Sprint P1 parsing cases.
 - Fake graph catalog.
-
-- Fake MATCH queries with tabular output.
-
-- Error handling for unavailable graphs and unsupported MATCH queries.
-
+- Fake broker/query data loaded from JSON files on disk.
+- JUnit unit and integration tests.
 - Windows launcher through `cyphail.bat`.
-
 - Modular routing and command handlers.
-
 - Build and execution completely from CMD.
 
+Sprint P1 still uses a fake engine/broker. The real SWI-Prolog execution
+engine is not part of this sprint.
 
+---
 
-For Sprint P1.1, Cyphail does **not** perform lexical analysis, parsing, AST generation, or Prolog execution.
+## Sprint P1 Query Scope
 
+The Sprint P1 parser is focused on the grammar and official test cases
+defined for this sprint.
 
+The current required scope includes:
 
-The MATCH queries and their results are intentionally wired in Java as fake behavior for this sprint.
+- Queries beginning with `MATCH`.
+- Node patterns.
+- More than one node pattern in the same `MATCH`.
+- Multiple labels in a node pattern.
+- Node properties.
+- Property expressions using already declared variables.
+- `WHERE`.
+- Simple comparisons:
+  - `<`
+  - `>`
+  - `<>`
+- `CREATE`.
+- `DELETE`.
+- `RETURN`.
+- Projection aliases with `AS`.
+- Semantic validation of undefined variables.
 
+Graph relationship patterns and nested `MATCH` expressions are outside the
+required Sprint P1 parser cases.
 
+---
 
 ## Prerequisites
 
-
-
 The following software must be installed before building Cyphail:
 
-
-
 - **JDK 26**
-
 - **Apache Maven 3.9 or later**
-
-- **Git** for repository management
-
+- **Git**
 - Windows CMD for the commands shown in this README
-
-
 
 Verify Java:
 
-
-
 ```cmd
-
 java -version
-
 ```
-
-
 
 Verify the Java compiler:
 
-
-
 ```cmd
-
 javac -version
-
 ```
-
-
 
 Verify Maven:
 
-
-
 ```cmd
-
 mvn -version
-
 ```
-
-
 
 Verify Git:
 
-
-
 ```cmd
-
 git --version
-
 ```
 
-
+---
 
 ## Project Structure
 
-
-
-The main project structure is:
-
-
+The main project structure is organized as follows:
 
 ```text
-
 cyphail/
-
-├── pom.xml
-
-├── README.md
-
-├── .gitignore
-
-├── cyphail.bat
-
-├── src/
-
-│   ├── main/
-
-│   │   └── java/
-
-│   │       └── cr/
-
-│   │           └── ac/
-
-│   │               └── una/
-
-│   │                   └── eif400/
-
-│   │                       └── cyphail/
-
-│   │                           ├── engine/
-
-│   │                           ├── frontend/
-
-│   │                           │   └── handler/
-
-│   │                           ├── model/
-
-│   │                           └── starter/
-
-│   └── test/
-
-│       └── java/
-
-└── target/
-
+|-- data/
+|   |-- graphs.json
+|   `-- queries/
+|-- pom.xml
+|-- README.md
+|-- .gitignore
+|-- cyphail.bat
+|-- src/
+|   |-- main/
+|   |   `-- java/
+|   |       `-- cr/ac/una/eif400/cyphail/
+|   |           |-- ast/
+|   |           |-- compiler/
+|   |           |   |-- analyzer/
+|   |           |   |-- lexer/
+|   |           |   `-- parser/
+|   |           |       `-- combinator/
+|   |           |-- engine/
+|   |           |-- frontend/
+|   |           |   `-- handler/
+|   |           |-- model/
+|   |           `-- starter/
+|   `-- test/
+|       `-- java/
+`-- target/
 ```
-
-
 
 The `target/` directory is generated by Maven and is ignored by Git.
 
+The `data/` directory contains the external fake JSON data used by the
+Sprint P1 fake broker/query engine.
 
+---
 
 ## Architecture Overview
 
+The implementation follows the general Cyphail architecture defined for the
+course.
 
-
-The current Sprint P1.1 implementation follows a modular structure.
-
-
+At a high level:
 
 ```text
-
-User
-
-&#x20; |
-
-&#x20; v
-
-CyphailApplication
-
-&#x20; |
-
-&#x20; v
-
-ReplCommand
-
-&#x20; |
-
-&#x20; v
-
-Repl
-
-&#x20; |
-
-&#x20; v
-
+User / Script
+     |
+     v
+Frontend / REPL
+     |
+     v
 CommandRouter
-
-&#x20; |
-
-&#x20; +--> HelpCommandHandler
-
-&#x20; +--> AboutCommandHandler
-
-&#x20; +--> UseCommandHandler
-
-&#x20; +--> FakeQueryHandler
-
-&#x20; +--> ExitCommandHandler
-
+     |
+     +--> HelpCommandHandler
+     +--> AboutCommandHandler
+     +--> UseCommandHandler
+     +--> TreeCommandHandler
+     +--> FakeQueryHandler
+     +--> ExitCommandHandler
 ```
 
-
-
-Fake query execution follows this flow:
-
-
+The Sprint P1 compiler path is:
 
 ```text
-
-MATCH query
-
-&#x20;   |
-
-&#x20;   v
-
-FakeQueryHandler
-
-&#x20;   |
-
-&#x20;   v
-
-FakeQueryEngine
-
-&#x20;   |
-
-&#x20;   v
-
-FakeQueryResult
-
-&#x20;   |
-
-&#x20;   v
-
-Tabular output
-
+Cyphail source query
+        |
+        v
+      Lexer
+        |
+        v
+Functional parser combinators
+        |
+        v
+  CyphailParser
+        |
+        v
+       AST
+        |
+        +--> SemanticAnalyzer
+        |
+        `--> AstTreePrinter
 ```
 
+The fake data path is:
 
+```text
+REPL query
+    |
+    v
+FakeQueryHandler
+    |
+    v
+FakeQueryEngine
+    |
+    v
+JSON data on disk
+    |
+    v
+FakeQueryResult
+    |
+    v
+Tabular output
+```
 
-The fake graph catalog is kept separately in the model package so the wired data can be easily modified and rebuilt during the Sprint P1.1 demonstration.
+The external JSON design allows fake results to be changed without changing
+or recompiling Java source code.
 
-
+---
 
 ## Building the Project
 
-
-
 Open CMD in the root directory of the project.
-
-
 
 Example:
 
-
-
 ```cmd
-
 cd C:\path\to\cyphail
-
 ```
 
-
-
-Clean and build the complete project with:
-
-
+Clean, test and package the complete project with:
 
 ```cmd
-
 mvn clean package
-
 ```
-
-
 
 A successful build must finish with:
 
-
-
 ```text
-
 BUILD SUCCESS
-
 ```
-
-
 
 The executable JAR is generated at:
 
-
-
 ```text
-
 target\cyphail-0.1.0.jar
-
 ```
 
-
+---
 
 ## Running Tests
 
-
-
-Run the project tests from CMD with:
-
-
+Run the complete test suite with:
 
 ```cmd
-
 mvn test
-
 ```
 
+A clean verification can also be performed with:
 
+```cmd
+mvn clean test
+```
 
-Tests are executed using JUnit through Maven.
+Tests are implemented with JUnit and executed through Maven Surefire.
 
+At the time of the Sprint P1 final review, the project contains unit and
+integration tests for:
 
+- AST model.
+- AST tree printer.
+- Semantic analyzer.
+- Lexer.
+- Functional parser combinators.
+- Cyphail parser.
+- Fake query engine.
+- Command router.
+- `.tree` command handler.
+- REPL.
+- Graph catalog.
+- Cyphail CLI.
+
+---
 
 ## Running Cyphail
 
-
-
 After a successful build, start the REPL from the root directory with:
 
-
-
 ```cmd
-
-cyphail repl
-
+java -jar target\cyphail-0.1.0.jar repl
 ```
-
-
 
 The program displays a welcome message similar to:
 
-
-
 ```text
-
-Welcome to Cyphail-04-10am v.0.1. August 2026. ESCINF/UNA EIF400-II-2026
-
-
+Welcome to Cyphail-04-10am v.0.1. September 2026. ESCINF/UNA EIF400-II-2026
 
 Visit www.whatiscyphail.com for more information
-
 Type ".help" for more information and commands
-
-
 
 Type ".exit" to quit
 
-
-
 >>>
-
 ```
 
-
-
-The Windows `cyphail.bat` file only verifies the Java environment and forwards command-line arguments to the Java application.
-
-
-
-The command logic is implemented in Java.
-
-
-
-Cyphail can also be executed directly through Java:
-
-
+The Windows launcher can also be used:
 
 ```cmd
-
-java -jar target\cyphail-0.1.0.jar repl
-
+cyphail repl
 ```
 
+The `cyphail.bat` file forwards command-line arguments to the Java
+application.
 
+---
 
 ## Command-Line Help
 
-
-
 General command-line help:
 
-
-
 ```cmd
-
-cyphail --help
-
+java -jar target\cyphail-0.1.0.jar --help
 ```
 
+or:
 
+```cmd
+cyphail --help
+```
 
 Version information:
 
-
-
 ```cmd
-
-cyphail --version
-
+java -jar target\cyphail-0.1.0.jar --version
 ```
 
+or:
 
+```cmd
+cyphail --version
+```
+
+---
 
 ## REPL Commands
 
-
-
 ### `.help`
-
-
 
 Displays the available REPL commands.
 
-
-
 ```text
-
 >>> .help
-
 ```
 
+The Sprint P1 help includes:
 
+```text
+.help                 Show available commands
+.about                Show project and author information
+.use                  Show available graphs
+.use <graph>          Select an available graph
+.tree                 Start multiline AST query mode
+.tree <query>         Parse a query and print its AST
+.exit                 Exit the Cyphail REPL
+```
+
+---
 
 ### `.about`
 
-
-
-Displays information about Cyphail, the course, work group, schedule, and team members.
-
-
+Displays project, Sprint P1, course, group and author information.
 
 ```text
-
 >>> .about
-
 ```
 
+It also summarizes the main Sprint P1 features.
 
+---
 
 ### `.use`
 
-
-
 Displays the fake graphs currently available.
 
-
-
 ```text
-
 >>> .use
-
 ```
 
-
-
-Example output:
-
-
-
-```text
-
-Graph       Description
-
-------------------------------------
-
-amigos      Social Network
-
-tasks       Tasks and resources
-
-teams       Soccer Teams
-
-planets     Planets in Solar System
-
-
-
-OK. Query available after 5 ms.
-
-```
-
-
+---
 
 ### `.use <graph>`
 
-
-
-Simulates access to an available graph.
-
-
+Selects an available fake graph.
 
 Example:
 
-
-
 ```text
-
 >>> .use amigos
-
-OK. "amigos" graph available after 1 ms.
-
 ```
 
+An unavailable graph produces an error without terminating the REPL.
 
+---
 
-An unavailable graph produces an error:
+### `.tree`
 
+Starts multiline query capture mode.
 
+Example:
 
 ```text
-
->>> .use pokemon
-
-ERROR. Graph "pokemon" is not available.
-
+>>> .tree
+>>> MATCH (m:Movie)
+>>> WHERE m.year > 1990
+>>> RETURN m.title AS title, m.year AS year
 ```
 
+The query is tokenized, parsed into the Cyphail AST, semantically analyzed
+and printed in a structured tree representation.
 
+Example output:
+
+```text
+Query{
+  Match:{
+    Patterns:[
+      PatternNode:{
+        var: m
+        labels: [Movie]
+        properties: []
+      }
+    ]
+  }
+  Where:{
+    Expr: (> (. m year) 1990)
+  }
+  Updates:[]
+  Return:{
+    Projection:{
+      Items:[
+        {as (. m title) title},
+        {as (. m year) year}
+      ]
+      Modifiers:[]
+    }
+  }
+}
+```
+
+---
+
+### `.tree <query>`
+
+Sprint P1 also supports the query directly on the same command line.
+
+Example:
+
+```text
+>>> .tree MATCH (m:Movie) RETURN m.title, m.year AS year
+```
+
+This produces the corresponding AST and immediately returns control to the
+REPL.
+
+---
 
 ### `.exit`
 
-
-
 Terminates the interactive REPL.
 
-
-
 ```text
-
 >>> .exit
-
 ```
 
+---
 
+## Syntax Error Handling
 
-## Fake MATCH Queries
-
-
-
-Sprint P1.1 supports wired MATCH queries.
-
-
-
-These queries are **not parsed** and do not generate an AST or communicate with Prolog.
-
-
-
-### Query 1
-
-
-
-```text
-
-MATCH (p:Persona) RETURN p.nombre, p.edad
-
-```
-
-
-
-Expected result:
-
-
-
-```text
-
-p.nombre    p.edad
-
-------------------------
-
-"Ana"       28
-
-"Luis"      31
-
-"Carlos"    25
-
-"Beatriz"   34
-
-"David"     29
-
-"Elena"     22
-
-
-
-OK. Query available after 42 ms.
-
-```
-
-
-
-### Query 2
-
-
-
-```text
-
-MATCH (p1:Persona)-[r:AMIGO_DE]->(p2:Persona) RETURN p1.nombre AS Persona, type(r) AS Relacion, p2.nombre AS AmigoDe
-
-```
-
-
-
-Expected result:
-
-
-
-```text
-
-Persona     Relacion       AmigoDe
-
---------------------------------------------
-
-"Ana"       "AMIGO_DE"     "Luis"
-
-"Ana"       "AMIGO_DE"     "Beatriz"
-
-"Luis"      "AMIGO_DE"     "Carlos"
-
-"Luis"      "AMIGO_DE"     "David"
-
-"Carlos"    "AMIGO_DE"     "Elena"
-
-"Beatriz"   "AMIGO_DE"     "Elena"
-
-
-
-OK. Query resolved after 666 ms.
-
-```
-
-
-
-### Query 3
-
-
-
-```text
-
-MATCH (p:Persona) WHERE p.edad > 28 RETURN p.nombre, p.edad
-
-```
-
-
-
-Expected result:
-
-
-
-```text
-
-p.nombre    p.edad
-
-------------------------
-
-"Luis"      31
-
-"Beatriz"   34
-
-"David"     29
-
-
-
-OK. Query available after 18 ms.
-
-```
-
-
-
-### Query 4
-
-
-
-```text
-
-MATCH (p:Persona)-[:AMIGO_DE]->(a:Persona) RETURN p.nombre, a.nombre
-
-```
-
-
-
-Expected result:
-
-
-
-```text
-
-p.nombre    a.nombre
-
--------------------------
-
-"Ana"       "Luis"
-
-"Ana"       "Beatriz"
-
-"Luis"      "Carlos"
-
-"Luis"      "David"
-
-"Carlos"    "Elena"
-
-"Beatriz"   "Elena"
-
-
-
-OK. Query available after 27 ms.
-
-```
-
-
-
-An unsupported MATCH query returns an error without terminating the REPL.
-
-
+Lexical or parsing problems used with `.tree` are reported directly in the
+REPL.
 
 Example:
 
-
-
 ```text
-
->>> MATCH (x:Animal) RETURN x.nombre
-
-ERROR. This MATCH query is not available in Sprint P1.1.
-
-```
-
-
-
-## Empty Command
-
-
-
-Pressing Enter without entering a command is treated as a null command.
-
-
-
-The REPL simply displays the prompt again:
-
-
-
-```text
-
+>>> .tree MATCH (m:Movie RETURN m.title
+Syntax error: Expected RIGHT_PAREN but found RETURN at token position 5
 >>>
+```
 
+The REPL remains available after the error.
+
+---
+
+## Semantic Validation
+
+Sprint P1 performs basic semantic validation over the generated AST.
+
+Variables used in expressions must have been defined by an earlier pattern.
+
+Example:
+
+```text
+>>> .tree
+>>> MATCH (p:Person), (o:Order {personId: p.id, status: "cancelled"})
+>>> WHERE q.age > 60
+>>> RETURN q AS name
+Undefined variable 'q' in WHERE clause.
+Undefined variable 'q' in RETURN clause.
 >>>
-
 ```
 
+The analyzer also validates declaration order.
 
-
-## Modifying the Wired Data
-
-
-
-The fake graph information is located in:
-
-
+Example:
 
 ```text
-
-src\main\java\cr\ac\una\eif400\cyphail\model\GraphCatalog.java
-
+>>> .tree
+>>> MATCH (o:Order {personId: p.id, status: "cancelled"}), (p:Person)
+>>> WHERE p.age > 60
+>>> CREATE (a:Archive {id: o.id, name: "retired", year: 2026})
+>>> DELETE o
+>>> RETURN p.name AS name
+Undefined variable 'p' in MATCH pattern.
+>>>
 ```
 
+---
 
+## Official Sprint P1 Parsing Examples
 
-The fake MATCH queries and results are located in:
+The parser supports the official Sprint P1 case categories, including:
 
-
+### Pattern and projection
 
 ```text
-
-src\main\java\cr\ac\una\eif400\cyphail\engine\FakeQueryEngine.java
-
+MATCH (m:Movie)
+RETURN m.title,
+       m.year AS year
 ```
 
+### Pattern, WHERE and projection
 
-
-After modifying the wired data, rebuild the project with:
-
-
-
-```cmd
-
-mvn clean package
-
+```text
+MATCH (b:Book)
+WHERE b.pages < 300
+RETURN b.title,
+       b.pages AS totalPages
 ```
 
+### Multiple labels and properties
 
-
-Then execute:
-
-
-
-```cmd
-
-cyphail repl
-
+```text
+MATCH (a:Person:Employee {id: 1})
+WHERE a.age > 30
+RETURN a.name AS name,
+       a.age AS age
 ```
 
+### Multiple disconnected patterns
 
+```text
+MATCH (m:Movie), (p:Person)
+WHERE m.year > 2000
+RETURN m.title AS title,
+       p.name AS actor
+```
 
-This design makes the fake functionality easy to modify and demonstrate during Sprint P1.1.
+### Attribute comparison
 
+```text
+MATCH (m:Movie), (p:Person)
+WHERE m.year <> p.age
+RETURN m.title AS title,
+       p.name AS name
+```
 
+### MATCH and CREATE
+
+```text
+MATCH (p:Person)
+WHERE p.age > 18
+CREATE (c:Certificate {issuedTo: "adult", year: 2026})
+RETURN p.name AS name,
+       p.age AS age
+```
+
+### Property expression
+
+```text
+MATCH (p:Person {id: 1}), (o:Order {personId: p.id})
+RETURN p.name AS name,
+       o.total AS total
+```
+
+### MATCH, CREATE and DELETE
+
+```text
+MATCH (p:Person), (o:Order {personId: p.id, status: "cancelled"})
+WHERE p.age > 60
+CREATE (a:Archive {id: o.id, name: "retired", year: 2026})
+DELETE o
+RETURN p.name AS name
+```
+
+---
+
+## Fake Broker and JSON Data
+
+The fake engine/broker remains intentionally fake during Sprint P1.
+
+Unlike the initial P1.1 implementation, fake query information is no longer
+required to be hard-coded in Java source code.
+
+The fake data is stored in the project `data/` directory in JSON format.
+
+This allows the fake data to be modified on disk and observed from the REPL
+without recompiling Java source code.
+
+This design prepares the broker boundary for later integration with JSON
+responses produced by the SWI-Prolog engine.
+
+---
 
 ## Technologies
 
-
-
 - Java 26
-
 - Apache Maven
-
 - picocli
-
+- Gson
 - JUnit
-
 - Git
-
 - GitHub
 
-
+---
 
 ## Sources and Credits
 
-
-
-The project was developed based on the course material provided by the professor for EIF400 - Paradigmas de Programación, including:
-
-
+The project was developed from the official course material for
+EIF400 - Paradigmas de Programacion, including:
 
 - Cyphail initial specification.
-
 - Cyphail general architecture.
-
-- Cyphail P1.1 review guide.
-
-- Sprint P1.1 instructions and examples provided by the professor.
-
-- Apache Maven documentation.
-
+- Cyphail Sprint P1 specification.
+- Cyphail Sprint P1 grammar.
+- Cyphail Sprint P1 official test cases.
+- Cyphail Sprint P1 review guide.
 - Java documentation.
-
+- Apache Maven documentation.
 - picocli documentation.
-
+- Gson documentation.
 - JUnit documentation.
-
-
 
 Cyphail is the official project name established for the course.
 
-
-
-The sample graph names, fake data, MATCH statements, and expected behavior are based on the Sprint P1.1 requirements and were extended with additional examples where necessary to satisfy the review guide.
-
-
+---
 
 ## Artificial Intelligence Use Declaration
 
+Generative artificial intelligence was used as a support tool during the
+development and review of Cyphail.
 
+Its use included:
 
-Generative artificial intelligence was used as a support tool during Sprint P1.1 for explanations, project-structure suggestions, code suggestions, documentation drafting, and troubleshooting.
+- explanations of course and project concepts;
+- project-structure suggestions;
+- code suggestions;
+- testing suggestions;
+- documentation drafting;
+- troubleshooting;
+- review of compiler, AST and REPL behavior.
 
+AI suggestions were manually reviewed, copied, adapted, compiled, executed
+and tested during development.
 
+The project team is responsible for understanding, maintaining, demonstrating
+and defending all submitted code.
 
-AI suggestions were manually reviewed, copied, adapted, compiled, executed, and tested during development. The project team is responsible for understanding, maintaining, demonstrating, and defending the submitted code.
+The implementation has been verified through manual builds, tests and
+executions from Windows CMD.
 
-
-
-The implementation was verified through manual builds and executions from Windows CMD.
-
-
+---
 
 ## Current Sprint Limitations
 
+Sprint P1 does not yet provide the final Cyphail execution engine.
 
+The current known limitations include:
 
-Sprint P1.1 intentionally does not include:
+- SWI-Prolog is not yet used as the real execution engine.
+- The broker/engine behavior remains fake.
+- Real graph persistence is not implemented.
+- Real graph query execution is not implemented.
+- Relationship-pattern parsing is outside the official Sprint P1 node-pattern
+  test scope.
+- Nested `MATCH` expressions are outside the Sprint P1 test scope.
 
+These elements belong to later Cyphail development stages.
 
-
-- Formal lexical analysis.
-
-- Formal parser.
-
-- Abstract Syntax Tree generation.
-
-- Prolog integration.
-
-- Real graph persistence.
-
-- Real graph query execution.
-
-
-
-These components belong to later Cyphail development stages.
-
-
+---
 
 ## License
 
-
-
-This project is an academic work developed for EIF400 - Paradigmas de Programación at Universidad Nacional de Costa Rica.
-
+This project is an academic work developed for
+EIF400 - Paradigmas de Programacion at Universidad Nacional de Costa Rica.
