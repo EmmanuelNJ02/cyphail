@@ -3,7 +3,7 @@ package cr.ac.una.eif400.cyphail.frontend.handler;
 /**
  * Handles the .about command in the Cyphail REPL.
  *
- * Project: Cyphail
+ * Project: Cyphail - Sprint P1
  * Course: EIF400 - Paradigmas de Programacion
  * University: Universidad Nacional de Costa Rica
  * School: Escuela de Informatica
@@ -40,7 +40,7 @@ public class AboutCommandHandler implements CommandHandler {
     }
 
     /**
-     * Displays project and author information.
+     * Displays project, sprint and author information.
      *
      * @param input command entered in the REPL
      * @return true because the REPL should continue running
@@ -49,13 +49,37 @@ public class AboutCommandHandler implements CommandHandler {
     public boolean handle(String input) {
         System.out.println("Cyphail");
         System.out.println("Version: 0.1");
-        System.out.println("Course: EIF400 - Paradigmas de Programacion");
-        System.out.println("University: Universidad Nacional de Costa Rica");
-        System.out.println("School: Escuela de Informatica");
+        System.out.println("Sprint: P1");
+        System.out.println("Date: September 2026");
+        System.out.println();
+
+        System.out.println(
+                "Course: EIF400 - Paradigmas de Programacion"
+        );
+
+        System.out.println(
+                "University: Universidad Nacional de Costa Rica"
+        );
+
+        System.out.println(
+                "School: Escuela de Informatica"
+        );
+
         System.out.println("Work Group: 04");
         System.out.println("Schedule: 10:00 a.m.");
         System.out.println("Group Code: 04-10am");
         System.out.println();
+
+        System.out.println("Sprint P1 features:");
+        System.out.println("- Cyphail REPL");
+        System.out.println("- Lexer and parser");
+        System.out.println("- Functional parser combinators");
+        System.out.println("- Abstract Syntax Tree (AST)");
+        System.out.println("- Semantic validation");
+        System.out.println("- .tree AST visualization");
+        System.out.println("- Fake broker data loaded from JSON");
+        System.out.println();
+
         System.out.println("Authors:");
         System.out.println("- Emmanuel Nunez Jimenez");
         System.out.println("- Valery Alfaro Morales");

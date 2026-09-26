@@ -3,7 +3,7 @@ package cr.ac.una.eif400.cyphail.frontend.handler;
 /**
  * Handles the .help command in the Cyphail REPL.
  *
- * Project: Cyphail
+ * Project: Cyphail - Sprint P1
  * Course: EIF400 - Paradigmas de Programacion
  * University: Universidad Nacional de Costa Rica
  * School: Escuela de Informatica
@@ -49,15 +49,41 @@ public class HelpCommandHandler implements CommandHandler {
     public boolean handle(String input) {
         System.out.println("Cyphail REPL commands:");
         System.out.println();
-        System.out.println(".help             Show available commands");
-        System.out.println(".about            Show project and author information");
-        System.out.println(".use              Show available graphs");
-        System.out.println(".use <graph>      Select an available graph");
-        System.out.println(".exit             Exit the Cyphail REPL");
+
+        System.out.println(
+                ".help                 Show available commands"
+        );
+
+        System.out.println(
+                ".about                Show project and author information"
+        );
+
+        System.out.println(
+                ".use                  Show available graphs"
+        );
+
+        System.out.println(
+                ".use <graph>          Select an available graph"
+        );
+
+        System.out.println(
+                ".tree                 Start multiline AST query mode"
+        );
+
+        System.out.println(
+                ".tree <query>         Parse a query and print its AST"
+        );
+
+        System.out.println(
+                ".exit                 Exit the Cyphail REPL"
+        );
+
         System.out.println();
+
         System.out.println(
                 "Cyphail queries can also be entered directly at the prompt."
         );
+
         System.out.println();
 
         return true;

@@ -13,8 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit tests for the Sprint P1 .tree command handler.
  *
- * <p>The tests verify tree capture mode, multiline query processing,
- * AST rendering and semantic error reporting for undefined variables.</p>
+ * <p>The tests verify tree capture mode, inline and multiline query
+ * processing, AST rendering, syntax error recovery and semantic
+ * error reporting for undefined variables.</p>
  *
  * <p>Project: Cyphail</p>
  * <p>Course: EIF400 - Paradigmas de Programacion</p>
@@ -219,6 +220,78 @@ class TreeCommandHandlerTest {
 
         assertFalse(
                 result.contains("Query{")
+        );
+
+        assertFalse(
+                handler.isAwaitingQuery()
+        );
+    }
+
+    @Test
+    void shouldPrintTreeForInlineQuery() {
+        TreeCommandHandler handler =
+                new TreeCommandHandler();
+
+        assertTrue(
+                handler.supports(
+                        ".tree MATCH (m:Movie) "
+                                + "RETURN m.title, "
+                                + "m.year AS year"
+                )
+        );
+
+        handler.handle(
+                ".tree MATCH (m:Movie) "
+                        + "RETURN m.title, "
+                        + "m.year AS year"
+        );
+
+        String result = output.toString();
+
+        assertTrue(
+                result.contains("Query{")
+        );
+
+        assertTrue(
+                result.contains("Match:{")
+        );
+
+        assertTrue(
+                result.contains(
+                        "{(. m title)}"
+                )
+        );
+
+        assertTrue(
+                result.contains(
+                        "{as (. m year) year}"
+                )
+        );
+
+        assertFalse(
+                handler.isAwaitingQuery()
+        );
+    }
+
+    @Test
+    void shouldReportSyntaxErrorAndResetAfterInlineQuery() {
+        TreeCommandHandler handler =
+                new TreeCommandHandler();
+
+        handler.handle(
+                ".tree MATCH (m:Movie RETURN m.title"
+        );
+
+        String result = output.toString();
+
+        assertTrue(
+                result.contains("Syntax error:")
+        );
+
+        assertTrue(
+                result.contains(
+                        "Expected RIGHT_PAREN"
+                )
         );
 
         assertFalse(

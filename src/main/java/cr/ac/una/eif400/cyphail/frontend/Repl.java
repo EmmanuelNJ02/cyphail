@@ -5,7 +5,7 @@ import java.util.Scanner;
 /**
  * Interactive Read-Eval-Print-Loop for Cyphail.
  *
- * Project: Cyphail
+ * Project: Cyphail - Sprint P1
  * Course: EIF400 - Paradigmas de Programacion
  * University: Universidad Nacional de Costa Rica
  * School: Escuela de Informatica
@@ -67,11 +67,11 @@ public class Repl {
     }
 
     /**
-     * Prints the official identification message for Sprint P1.1.
+     * Prints the official identification message for Sprint P1.
      */
     private void printWelcome() {
         System.out.println(
-                "Welcome to Cyphail-04-10am v.0.1. August 2026. "
+                "Welcome to Cyphail-04-10am v.0.1. September 2026. "
                         + "ESCINF/UNA EIF400-II-2026"
         );
         System.out.println();
