@@ -1,15 +1,20 @@
 package cr.ac.una.eif400.cyphail.model;
 
-import java.util.ArrayList;
-import java.util.Collections;
+import cr.ac.una.eif400.cyphail.data.GraphCatalogJsonRepository;
+
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Stores the fake graph catalog used during Cyphail Sprint P1.1.
+ * Provides access to the fake graph catalog used by Cyphail.
  *
- * The catalog is intentionally simple and easy to modify during
- * the project demonstration and rebuild process.
+ * The catalog entries are no longer wired directly in Java.
+ * Graph information is loaded from data/graphs.json through
+ * {@link GraphCatalogJsonRepository}.
+ *
+ * The JSON file is read again whenever the catalog is requested,
+ * allowing changes made on disk to be observed without recompiling
+ * the application.
  *
  * Project: Cyphail
  * Course: EIF400 - Paradigmas de Programacion
@@ -34,15 +39,6 @@ import java.util.Optional;
  */
 public final class GraphCatalog {
 
-    private static final List<GraphInfo> GRAPHS = new ArrayList<>();
-
-    static {
-        GRAPHS.add(new GraphInfo("amigos", "Social Network"));
-        GRAPHS.add(new GraphInfo("tasks", "Tasks and resources"));
-        GRAPHS.add(new GraphInfo("teams", "Soccer Teams"));
-        GRAPHS.add(new GraphInfo("planets", "Planets in Solar System"));
-    }
-
     /**
      * Prevents instances of this utility class.
      */
@@ -50,23 +46,32 @@ public final class GraphCatalog {
     }
 
     /**
-     * Returns all graphs available in the fake catalog.
+     * Returns all graphs currently available in the fake catalog.
      *
-     * @return read-only list of available graphs
+     * The catalog is loaded from data/graphs.json every time this
+     * method is invoked.
+     *
+     * @return immutable list of available graphs
      */
     public static List<GraphInfo> getGraphs() {
-        return Collections.unmodifiableList(GRAPHS);
+        return GraphCatalogJsonRepository.findAll();
     }
 
     /**
-     * Finds a graph by its name.
+     * Finds a graph by name.
+     *
+     * Graph lookup remains case insensitive, preserving the
+     * behavior provided by Sprint P1.1.
      *
      * @param name graph name
      * @return graph information when found
      */
     public static Optional<GraphInfo> findByName(String name) {
-        return GRAPHS.stream()
-                .filter(graph -> graph.getName().equalsIgnoreCase(name))
+        return getGraphs()
+                .stream()
+                .filter(graph ->
+                        graph.getName().equalsIgnoreCase(name)
+                )
                 .findFirst();
     }
 }

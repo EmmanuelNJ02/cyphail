@@ -1,0 +1,34 @@
+{
+  "query": "MATCH (p:Persona)-[:AMIGO_DE]->(a:Persona) RETURN p.nombre, a.nombre",
+  "headers": [
+    "p.nombre",
+    "a.nombre"
+  ],
+  "rows": [
+    [
+      "\"Ana\"",
+      "\"Luis\""
+    ],
+    [
+      "\"Ana\"",
+      "\"Beatriz\""
+    ],
+    [
+      "\"Luis\"",
+      "\"Carlos\""
+    ],
+    [
+      "\"Luis\"",
+      "\"David\""
+    ],
+    [
+      "\"Carlos\"",
+      "\"Elena\""
+    ],
+    [
+      "\"Beatriz\"",
+      "\"Elena\""
+    ]
+  ],
+  "statusMessage": "OK. Query available after 27 ms."
+}

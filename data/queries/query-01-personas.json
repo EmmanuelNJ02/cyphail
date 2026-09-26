@@ -1,0 +1,34 @@
+{
+  "query": "MATCH (p:Persona) RETURN p.nombre, p.edad",
+  "headers": [
+    "p.nombre",
+    "p.edad"
+  ],
+  "rows": [
+    [
+      "\"Ana\"",
+      "28"
+    ],
+    [
+      "\"Luis\"",
+      "31"
+    ],
+    [
+      "\"Carlos\"",
+      "25"
+    ],
+    [
+      "\"Beatriz\"",
+      "34"
+    ],
+    [
+      "\"David\"",
+      "29"
+    ],
+    [
+      "\"Elena\"",
+      "22"
+    ]
+  ],
+  "statusMessage": "OK. Query available after 42 ms."
+}

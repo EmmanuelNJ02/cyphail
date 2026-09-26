@@ -5,11 +5,14 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Represents a fake tabular query result used during Cyphail Sprint P1.1.
+ * Represents a fake tabular query result used by Cyphail.
  *
- * No parsing, AST generation or Prolog execution is performed in this sprint.
- * The result is intentionally wired in Java so it can be easily modified
- * and rebuilt during the project demonstration.
+ * During Sprint P1, fake query data is loaded from JSON documents
+ * stored on disk instead of being wired directly in Java.
+ *
+ * This class remains responsible only for representing the decoded
+ * tabular result: column headers, rows and the informational status
+ * message displayed by the REPL.
  *
  * Project: Cyphail
  * Course: EIF400 - Paradigmas de Programacion

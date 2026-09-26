@@ -10,7 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for the fake query engine used during Cyphail Sprint P1.1.
+ * Tests for the fake query engine used by Cyphail.
+ *
+ * During Sprint P1, fake query results are loaded from JSON documents
+ * stored on disk instead of being wired directly in Java.
+ *
+ * These tests verify that the four Sprint P1.1 demonstration queries
+ * continue to work after the migration to disk-based JSON data.
  *
  * Project: Cyphail
  * Course: EIF400 - Paradigmas de Programacion
@@ -37,7 +43,7 @@ class FakeQueryEngineTest {
 
     /**
      * Verifies that the four MATCH queries required for the Sprint P1.1
-     * demonstration have wired fake results.
+     * demonstration have fake results available from JSON data on disk.
      */
     @Test
     void shouldSupportTheFourSprintQueries() {

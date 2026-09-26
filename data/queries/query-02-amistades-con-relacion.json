@@ -1,0 +1,41 @@
+{
+  "query": "MATCH (p1:Persona)-[r:AMIGO_DE]->(p2:Persona) RETURN p1.nombre AS Persona, type(r) AS Relacion, p2.nombre AS AmigoDe",
+  "headers": [
+    "Persona",
+    "Relacion",
+    "AmigoDe"
+  ],
+  "rows": [
+    [
+      "\"Ana\"",
+      "\"AMIGO_DE\"",
+      "\"Luis\""
+    ],
+    [
+      "\"Ana\"",
+      "\"AMIGO_DE\"",
+      "\"Beatriz\""
+    ],
+    [
+      "\"Luis\"",
+      "\"AMIGO_DE\"",
+      "\"Carlos\""
+    ],
+    [
+      "\"Luis\"",
+      "\"AMIGO_DE\"",
+      "\"David\""
+    ],
+    [
+      "\"Carlos\"",
+      "\"AMIGO_DE\"",
+      "\"Elena\""
+    ],
+    [
+      "\"Beatriz\"",
+      "\"AMIGO_DE\"",
+      "\"Elena\""
+    ]
+  ],
+  "statusMessage": "OK. Query resolved after 666 ms."
+}
