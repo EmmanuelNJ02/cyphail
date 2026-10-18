@@ -23,6 +23,7 @@ import cr.ac.una.eif400.cyphail.ast.expression.StringLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.VariableExpression;
 import cr.ac.una.eif400.cyphail.ast.pattern.NodePattern;
 import cr.ac.una.eif400.cyphail.ast.pattern.Pattern;
+import cr.ac.una.eif400.cyphail.ast.pattern.PatternPath;
 import cr.ac.una.eif400.cyphail.ast.pattern.PatternProperty;
 import cr.ac.una.eif400.cyphail.compiler.lexer.CyphailLexer;
 import cr.ac.una.eif400.cyphail.compiler.lexer.Token;
@@ -40,26 +41,36 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Concrete functional parser for the Cyphail Sprint P1 language subset.
+ * Concrete functional parser for the Cyphail language.
  *
- * <p>The parser consumes the immutable token stream produced by the
- * CyphailLexer and builds the Cyphail AST through the functional parser
- * combinator infrastructure.</p>
+ * <p>The parser consumes the immutable token stream produced by
+ * CyphailLexer and builds the Cyphail AST through functional
+ * parser combinators.</p>
  *
- * <p>The Sprint P1 public cases handled here include node patterns,
- * multiple disconnected node patterns, node properties, WHERE comparisons,
- * CREATE, DELETE and RETURN projections.</p>
+ * <p>Sprint P1 supports node patterns, node properties, WHERE
+ * comparisons, CREATE, DELETE and RETURN projections.</p>
  *
- * <p>Project: Cyphail - Sprint P1<br>
- * Course: EIF400 - Paradigmas de Programacion<br>
- * Universidad Nacional de Costa Rica<br>
- * Group: 04-10am</p>
+ * <p>Sprint P2 extends pattern parsing to support relationship
+ * paths, relationship properties and the directions IN, OUT
+ * and NONE. The original Sprint P1 parsing behavior is preserved.</p>
  *
- * @author Emmanuel Nunez Jimenez
- * @author Keynell Molina Mora
- * @author Valery Alfaro Morales
- * @author Julissa Solano Valverde
- * @author Roy Arias Mejia
+ * <p>Project: Cyphail - Sprint P2</p>
+ * <p>Course: EIF400 - Paradigmas de Programacion</p>
+ * <p>Universidad Nacional de Costa Rica</p>
+ * <p>Escuela de Informatica</p>
+ * <p>Group Code: 04-10am</p>
+ *
+ * <p>Authors:</p>
+ * <ul>
+ *     <li>Emmanuel Nunez Jimenez</li>
+ *     <li>Valery Alfaro Morales</li>
+ *     <li>Roy Arias Mejia</li>
+ *     <li>Keynell Molina Mora</li>
+ *     <li>Julissa Solano Valverde</li>
+ * </ul>
+ *
+ * <p>Sprint P2 contribution:
+ * Integration of functional relationship path parsing.</p>
  */
 public final class CyphailParser {
 
@@ -220,22 +231,53 @@ public final class CyphailParser {
                 );
     }
 
+    /**
+     * Parses one or more comma-separated pattern paths.
+     *
+     * <p>Sprint P1 node-only patterns are represented as
+     * isolated paths. Sprint P2 relationship patterns retain
+     * their ordered relationship steps.</p>
+     *
+     * @return parser for a complete pattern
+     */
     private Parser<Pattern> patternParser() {
-        return nodePatternParser().flatMap(
+        return patternPathParser().flatMap(
                 first -> Parsers.many(
-                        commaThenNodePatternParser()
+                        commaThenPatternPathParser()
                 ).map(
-                        rest -> new Pattern(
+                        rest -> Pattern.fromPaths(
                                 prepend(first, rest)
                         )
                 )
         );
     }
 
-    private Parser<NodePattern> commaThenNodePatternParser() {
+    /**
+     * Parses a node followed by zero or more relationship steps.
+     *
+     * <p>Existing node, identifier, label and property parsers
+     * are reused to preserve the functional design.</p>
+     *
+     * @return parser for a pattern path
+     */
+    private Parser<PatternPath> patternPathParser() {
+        return PatternPathParser.path(
+                nodePatternParser(),
+                identifierNameParser(),
+                labelParser(),
+                nodePropertiesParser()
+        );
+    }
+
+    /**
+     * Parses a comma followed by another pattern path.
+     *
+     * @return parser for a comma-separated pattern path
+     */
+    private Parser<PatternPath> commaThenPatternPathParser() {
         return Parsers.token(TokenType.COMMA)
                 .flatMap(
-                        comma -> nodePatternParser()
+                        comma -> patternPathParser()
                 );
     }
 
