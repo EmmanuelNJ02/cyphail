@@ -20,19 +20,36 @@ import cr.ac.una.eif400.cyphail.ast.expression.StringLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.VariableExpression;
 import cr.ac.una.eif400.cyphail.ast.pattern.NodePattern;
 import cr.ac.una.eif400.cyphail.ast.pattern.Pattern;
+import cr.ac.una.eif400.cyphail.ast.pattern.PatternPath;
 import cr.ac.una.eif400.cyphail.ast.pattern.PatternProperty;
+import cr.ac.una.eif400.cyphail.ast.pattern.RelationshipPattern;
+import cr.ac.una.eif400.cyphail.ast.pattern.RelationshipStep;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 /**
- * Visitor that produces the logical tree representation used by
- * the Sprint P1 .tree REPL command.
+ * Visitor that produces the logical tree representation
+ * used by the Cyphail .tree REPL command.
  *
- * <p>The output follows the structure shown in the Sprint P1
- * specification: Query, Match, Where, Updates and Return. Expressions
- * are rendered in preorder notation.</p>
+ * <p>Sprint P1 supports visualization of query clauses,
+ * node patterns, properties, projections and expressions
+ * in preorder notation.</p>
+ *
+ * <p>Sprint P2 extends the tree representation with
+ * relationship paths, relationship variables, types,
+ * properties and directions.</p>
+ *
+ * <p>Supported relationship directions:</p>
+ * <ul>
+ *     <li>OUT: outgoing relationship</li>
+ *     <li>IN: incoming relationship</li>
+ *     <li>NONE: undirected relationship</li>
+ * </ul>
+ *
+ * <p>Node-only patterns retain the original Sprint P1
+ * representation for backward compatibility.</p>
  *
  * <p>Examples of preorder expressions:</p>
  *
@@ -41,13 +58,14 @@ import java.util.Objects;
  * m.year > 1990 -> (> (. m year) 1990)
  * </pre>
  *
- * <p>The visitor is intentionally independent from the parser and the
- * REPL. It receives an already built AST and returns only its logical
+ * <p>The visitor is independent from the parser and REPL.
+ * It receives an existing AST and produces its logical
  * textual representation.</p>
  *
- * <p>Project: Cyphail</p>
+ * <p>Project: Cyphail - Sprint P2</p>
  * <p>Course: EIF400 - Paradigmas de Programacion</p>
- * <p>Universidad Nacional de Costa Rica - Escuela de Informatica</p>
+ * <p>Universidad Nacional de Costa Rica</p>
+ * <p>Escuela de Informatica</p>
  * <p>Group Code: 04-10am</p>
  *
  * <p>Authors:</p>
@@ -58,6 +76,10 @@ import java.util.Objects;
  *     <li>Keynell Molina Mora</li>
  *     <li>Julissa Solano Valverde</li>
  * </ul>
+ *
+ * <p>Sprint P2 contribution:
+ * Relationship path visualization with backward
+ * compatibility for Sprint P1.</p>
  */
 public final class AstTreePrinter implements AstVisitor<String> {
 
@@ -197,6 +219,16 @@ public final class AstTreePrinter implements AstVisitor<String> {
         );
     }
 
+    /**
+     * Renders comma-separated pattern paths.
+     *
+     * <p>Isolated nodes retain the Sprint P1 tree format.
+     * Relationship paths include all relationships and
+     * destination nodes in their original source order.</p>
+     *
+     * @param pattern pattern AST
+     * @return formatted pattern collection
+     */
     @Override
     public String visitPattern(Pattern pattern) {
         StringBuilder output = new StringBuilder();
@@ -204,19 +236,19 @@ public final class AstTreePrinter implements AstVisitor<String> {
         output.append("[\n");
 
         for (int index = 0;
-             index < pattern.nodes().size();
+             index < pattern.paths().size();
              index++) {
+
+            PatternPath path = pattern.paths().get(index);
 
             output.append(
                     indent(
-                            visitNodePattern(
-                                    pattern.nodes().get(index)
-                            ),
+                            renderPatternPath(path),
                             2
                     )
             );
 
-            if (index < pattern.nodes().size() - 1) {
+            if (index < pattern.paths().size() - 1) {
                 output.append(",");
             }
 
@@ -226,6 +258,102 @@ public final class AstTreePrinter implements AstVisitor<String> {
         output.append("]");
 
         return output.toString();
+    }
+
+    /**
+     * Renders an isolated node or a complete relationship path.
+     *
+     * <p>A relationship path is represented by its first node,
+     * followed by ordered relationship and destination-node
+     * pairs.</p>
+     *
+     * @param path pattern path to render
+     * @return formatted path representation
+     */
+    private String renderPatternPath(PatternPath path) {
+        if (!path.hasRelationships()) {
+            return visitNodePattern(path.firstNode());
+        }
+
+        StringBuilder output = new StringBuilder();
+
+        output.append("PatternPath:{\n");
+
+        output.append(
+                indent(
+                        visitNodePattern(path.firstNode()),
+                        2
+                )
+        );
+
+        for (RelationshipStep step : path.steps()) {
+            output.append("\n");
+
+            output.append(
+                    indent(
+                            renderRelationshipPattern(
+                                    step.relationship()
+                            ),
+                            2
+                    )
+            );
+
+            output.append("\n");
+
+            output.append(
+                    indent(
+                            visitNodePattern(
+                                    step.rightNode()
+                            ),
+                            2
+                    )
+            );
+        }
+
+        output.append("\n}");
+
+        return output.toString();
+    }
+
+    /**
+     * Renders a relationship with its variable, types,
+     * direction and properties.
+     *
+     * <p>The direction is relative to the preceding
+     * and following nodes of the path.</p>
+     *
+     * @param relationship relationship pattern
+     * @return formatted relationship representation
+     */
+    private String renderRelationshipPattern(
+            RelationshipPattern relationship
+    ) {
+        String variable =
+                relationship.variable().orElse("null");
+
+        String types = relationship.types().isEmpty()
+                ? ""
+                : String.join(
+                        ", ",
+                        relationship.types()
+                );
+
+        String properties = renderProperties(
+                relationship.properties()
+        );
+
+        return """
+                PatternRelationship:{
+                  var: %s
+                  types: [%s]
+                  direction: %s
+                  properties: %s
+                }""".formatted(
+                variable,
+                types,
+                relationship.direction().name(),
+                properties
+        );
     }
 
     @Override
