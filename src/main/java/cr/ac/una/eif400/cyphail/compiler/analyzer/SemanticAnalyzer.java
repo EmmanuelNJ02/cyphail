@@ -12,39 +12,52 @@ import cr.ac.una.eif400.cyphail.ast.expression.PropertyExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.VariableExpression;
 import cr.ac.una.eif400.cyphail.ast.pattern.NodePattern;
 import cr.ac.una.eif400.cyphail.ast.pattern.Pattern;
+import cr.ac.una.eif400.cyphail.ast.pattern.PatternPath;
 import cr.ac.una.eif400.cyphail.ast.pattern.PatternProperty;
+import cr.ac.una.eif400.cyphail.ast.pattern.RelationshipPattern;
+import cr.ac.una.eif400.cyphail.ast.pattern.RelationshipStep;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
- * Semantic analyzer for the Cyphail Sprint P1 AST.
+ * Semantic analyzer for the Cyphail language.
  *
- * <p>The analyzer traverses a query in source order and maintains a
- * symbol table containing the variables that have already been
- * declared. Variable references are validated against that table.</p>
+ * <p>Sprint P1 validates variable declarations and references
+ * according to the order in which query clauses appear.</p>
  *
- * <p>The traversal order is:</p>
+ * <p>Sprint P2 extends the analysis with relationship
+ * variables and additional static semantic restrictions.</p>
  *
- * <pre>
- * MATCH
- * WHERE
- * updating clauses
- * RETURN
- * </pre>
+ * <p>Sprint P2 rules:</p>
+ * <ul>
+ *     <li>Relationship variables cannot be declared twice
+ *         within the same query.</li>
+ *     <li>Node and relationship variables cannot share
+ *         the same name.</li>
+ *     <li>Variables cannot begin with two underscores.</li>
+ *     <li>Node variables may be reused for joins.</li>
+ *     <li>Relationship properties may reference previously
+ *         declared variables.</li>
+ * </ul>
  *
- * <p>This order allows the analyzer to detect references to variables
- * that are used before they are declared, including variables used
- * inside node-pattern properties.</p>
+ * <p>The analyzer processes MATCH, WHERE, updating clauses
+ * and RETURN in source order. Pattern paths are traversed
+ * from their first node through each relationship step.</p>
  *
- * <p>Property names are not treated as variables. For example, in
- * p.id only p is validated against the symbol table; id is the
- * property name.</p>
+ * <p>The symbol table includes both node and relationship
+ * variables, while separate sets preserve their roles.</p>
  *
- * <p>Project: Cyphail</p>
+ * <p>Property names, node labels and relationship types
+ * are not treated as variable declarations.</p>
+ *
+ * <p>Project: Cyphail - Sprint P2</p>
  * <p>Course: EIF400 - Paradigmas de Programacion</p>
- * <p>Universidad Nacional de Costa Rica - Escuela de Informatica</p>
+ * <p>Universidad Nacional de Costa Rica</p>
+ * <p>Escuela de Informatica</p>
  * <p>Group Code: 04-10am</p>
  *
  * <p>Authors:</p>
@@ -55,11 +68,18 @@ import java.util.Objects;
  *     <li>Keynell Molina Mora</li>
  *     <li>Julissa Solano Valverde</li>
  * </ul>
+ *
+ * <p>Sprint P2 contribution:
+ * Relationship-aware static semantic validation.</p>
  */
 public final class SemanticAnalyzer {
 
     /**
      * Analyzes a parsed Cyphail query.
+     *
+     * <p>A fresh analysis state is created for every query
+     * to prevent variable declarations from leaking between
+     * separate invocations.</p>
      *
      * @param query query AST
      * @return semantic analysis result
@@ -70,21 +90,18 @@ public final class SemanticAnalyzer {
                 "Query cannot be null"
         );
 
-        SymbolTable symbols = new SymbolTable();
-        List<String> errors = new ArrayList<>();
+        AnalysisState state = new AnalysisState();
 
         analyzePattern(
                 query.match().pattern(),
-                symbols,
-                errors,
+                state,
                 "MATCH pattern"
         );
 
         query.where().ifPresent(
                 where -> analyzeExpression(
                         where.expression(),
-                        symbols,
-                        errors,
+                        state,
                         "WHERE clause"
                 )
         );
@@ -92,8 +109,7 @@ public final class SemanticAnalyzer {
         for (UpdatingClause update : query.updates()) {
             analyzeUpdatingClause(
                     update,
-                    symbols,
-                    errors
+                    state
             );
         }
 
@@ -104,27 +120,32 @@ public final class SemanticAnalyzer {
 
                         analyzeExpression(
                                 item.expression(),
-                                symbols,
-                                errors,
+                                state,
                                 "RETURN clause"
                         );
                     }
                 }
         );
 
-        return new SemanticAnalysisResult(errors);
+        return new SemanticAnalysisResult(
+                state.errors
+        );
     }
 
+    /**
+     * Analyzes an updating clause in source order.
+     *
+     * @param update updating clause
+     * @param state query analysis state
+     */
     private void analyzeUpdatingClause(
             UpdatingClause update,
-            SymbolTable symbols,
-            List<String> errors
+            AnalysisState state
     ) {
         if (update instanceof CreateClause createClause) {
             analyzePattern(
                     createClause.pattern(),
-                    symbols,
-                    errors,
+                    state,
                     "CREATE pattern"
             );
             return;
@@ -136,48 +157,212 @@ public final class SemanticAnalyzer {
 
                 analyzeExpression(
                         expression,
-                        symbols,
-                        errors,
+                        state,
                         "DELETE clause"
                 );
             }
         }
     }
 
+    /**
+     * Analyzes all pattern paths in their original order.
+     *
+     * @param pattern pattern AST
+     * @param state query analysis state
+     * @param context clause description
+     */
     private void analyzePattern(
             Pattern pattern,
-            SymbolTable symbols,
-            List<String> errors,
+            AnalysisState state,
             String context
     ) {
-        for (NodePattern node : pattern.nodes()) {
+        for (PatternPath path : pattern.paths()) {
+            analyzeNode(
+                    path.firstNode(),
+                    state,
+                    context
+            );
 
-            node.variable().ifPresent(symbols::define);
+            for (RelationshipStep step : path.steps()) {
+                analyzeRelationship(
+                        step.relationship(),
+                        state,
+                        context
+                );
 
-            for (PatternProperty property
-                    : node.properties()) {
-
-                analyzeExpression(
-                        property.value(),
-                        symbols,
-                        errors,
+                analyzeNode(
+                        step.rightNode(),
+                        state,
                         context
                 );
             }
         }
     }
 
+    /**
+     * Registers a node variable and validates its properties.
+     *
+     * <p>A node variable may appear multiple times in a query,
+     * allowing patterns to join through the same variable.</p>
+     *
+     * @param node node pattern
+     * @param state query analysis state
+     * @param context clause description
+     */
+    private void analyzeNode(
+            NodePattern node,
+            AnalysisState state,
+            String context
+    ) {
+        node.variable().ifPresent(
+                name -> {
+                    validateReservedVariable(
+                            name,
+                            state,
+                            context
+                    );
+
+                    if (state.relationshipVariables.contains(name)) {
+                        reportVariableRoleConflict(
+                                name,
+                                state
+                        );
+                    }
+
+                    state.nodeVariables.add(name);
+                    state.symbols.define(name);
+                }
+        );
+
+        for (PatternProperty property : node.properties()) {
+            analyzeExpression(
+                    property.value(),
+                    state,
+                    context
+            );
+        }
+    }
+
+    /**
+     * Registers a relationship variable and validates
+     * its properties.
+     *
+     * <p>Unlike node variables, relationship variables
+     * must be unique within the complete query.</p>
+     *
+     * @param relationship relationship pattern
+     * @param state query analysis state
+     * @param context clause description
+     */
+    private void analyzeRelationship(
+            RelationshipPattern relationship,
+            AnalysisState state,
+            String context
+    ) {
+        relationship.variable().ifPresent(
+                name -> {
+                    validateReservedVariable(
+                            name,
+                            state,
+                            context
+                    );
+
+                    if (state.nodeVariables.contains(name)) {
+                        reportVariableRoleConflict(
+                                name,
+                                state
+                        );
+                    }
+
+                    if (!state.relationshipVariables.add(name)) {
+                        state.errors.add(
+                                "Relationship variable '"
+                                        + name
+                                        + "' is declared more than once "
+                                        + "in the query."
+                        );
+                    }
+
+                    state.symbols.define(name);
+                }
+        );
+
+        for (PatternProperty property
+                : relationship.properties()) {
+
+            analyzeExpression(
+                    property.value(),
+                    state,
+                    context
+            );
+        }
+    }
+
+    /**
+     * Reports a name used for both a node and a relationship.
+     *
+     * @param name conflicting variable name
+     * @param state query analysis state
+     */
+    private void reportVariableRoleConflict(
+            String name,
+            AnalysisState state
+    ) {
+        state.errors.add(
+                "Variable '"
+                        + name
+                        + "' cannot be used as both "
+                        + "a node and a relationship."
+        );
+    }
+
+    /**
+     * Checks the reserved double-underscore prefix.
+     *
+     * <p>The prefix is reserved for generated Prolog
+     * identifiers used by the Cyphail transpiler.</p>
+     *
+     * @param name variable name
+     * @param state query analysis state
+     * @param context clause description
+     */
+    private void validateReservedVariable(
+            String name,
+            AnalysisState state,
+            String context
+    ) {
+        if (name.startsWith("__")
+                && state.reportedReservedVariables.add(name)) {
+
+            state.errors.add(
+                    "Variable '"
+                            + name
+                            + "' cannot start with '__' in "
+                            + context
+                            + "."
+            );
+        }
+    }
+
+    /**
+     * Analyzes variable references inside an expression.
+     *
+     * <p>Property names are not variable references.
+     * Only the target expression is analyzed.</p>
+     *
+     * @param expression expression AST
+     * @param state query analysis state
+     * @param context clause description
+     */
     private void analyzeExpression(
             Expression expression,
-            SymbolTable symbols,
-            List<String> errors,
+            AnalysisState state,
             String context
     ) {
         if (expression instanceof VariableExpression variable) {
             validateVariable(
                     variable.name(),
-                    symbols,
-                    errors,
+                    state,
                     context
             );
             return;
@@ -186,8 +371,7 @@ public final class SemanticAnalyzer {
         if (expression instanceof PropertyExpression property) {
             analyzeExpression(
                     property.target(),
-                    symbols,
-                    errors,
+                    state,
                     context
             );
             return;
@@ -196,15 +380,13 @@ public final class SemanticAnalyzer {
         if (expression instanceof BinaryExpression binary) {
             analyzeExpression(
                     binary.left(),
-                    symbols,
-                    errors,
+                    state,
                     context
             );
 
             analyzeExpression(
                     binary.right(),
-                    symbols,
-                    errors,
+                    state,
                     context
             );
             return;
@@ -220,14 +402,26 @@ public final class SemanticAnalyzer {
         );
     }
 
+    /**
+     * Validates a variable reference against the symbol table.
+     *
+     * @param name referenced variable
+     * @param state query analysis state
+     * @param context clause description
+     */
     private void validateVariable(
             String name,
-            SymbolTable symbols,
-            List<String> errors,
+            AnalysisState state,
             String context
     ) {
-        if (!symbols.isDefined(name)) {
-            errors.add(
+        validateReservedVariable(
+                name,
+                state,
+                context
+        );
+
+        if (!state.symbols.isDefined(name)) {
+            state.errors.add(
                     "Undefined variable '"
                             + name
                             + "' in "
@@ -235,5 +429,30 @@ public final class SemanticAnalyzer {
                             + "."
             );
         }
+    }
+
+    /**
+     * Stores the mutable analysis data for one query only.
+     *
+     * <p>Using a local state instance keeps the analyzer
+     * reusable without sharing variable declarations
+     * between queries.</p>
+     */
+    private static final class AnalysisState {
+
+        private final SymbolTable symbols =
+                new SymbolTable();
+
+        private final Set<String> nodeVariables =
+                new LinkedHashSet<>();
+
+        private final Set<String> relationshipVariables =
+                new LinkedHashSet<>();
+
+        private final Set<String> reportedReservedVariables =
+                new LinkedHashSet<>();
+
+        private final List<String> errors =
+                new ArrayList<>();
     }
 }
