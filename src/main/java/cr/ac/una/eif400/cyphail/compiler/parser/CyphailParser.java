@@ -55,6 +55,9 @@ import java.util.Optional;
  * paths, relationship properties and the directions IN, OUT
  * and NONE. The original Sprint P1 parsing behavior is preserved.</p>
  *
+ * <p>Sprint P2 also supports decimal literals and standalone
+ * CREATE statements without a preceding MATCH clause.</p>
+ *
  * <p>Project: Cyphail - Sprint P2</p>
  * <p>Course: EIF400 - Paradigmas de Programacion</p>
  * <p>Universidad Nacional de Costa Rica</p>
@@ -69,9 +72,6 @@ import java.util.Optional;
  *     <li>Keynell Molina Mora</li>
  *     <li>Julissa Solano Valverde</li>
  * </ul>
- *
- * <p>Sprint P2 contribution:
- * Integration of functional relationship path parsing.</p>
  */
 public final class CyphailParser {
 
@@ -103,7 +103,10 @@ public final class CyphailParser {
      * @return parse result containing the Query AST or a failure
      */
     public ParseResult<Query> parse(String source) {
-        Objects.requireNonNull(source, "Source cannot be null");
+        Objects.requireNonNull(
+                source,
+                "Source cannot be null"
+        );
 
         List<Token> tokens = lexer.tokenize(source);
         ParserInput input = ParserInput.from(tokens);
@@ -134,7 +137,37 @@ public final class CyphailParser {
         );
     }
 
+    /**
+     * Selects the query grammar based on the first token.
+     *
+     * <p>Queries starting with CREATE use the Sprint P2
+     * standalone CREATE parser. All other queries follow
+     * the original MATCH-first parser.</p>
+     *
+     * <p>This avoids hiding a syntax error inside a malformed
+     * MATCH query by attempting an unrelated CREATE parser.</p>
+     *
+     * @return parser for a complete query
+     */
     private Parser<Query> queryParser() {
+        return input -> {
+            if (input.current().type() == TokenType.CREATE) {
+                return createStartingQueryParser().parse(input);
+            }
+
+            return matchStartingQueryParser().parse(input);
+        };
+    }
+
+    /**
+     * Parses queries that begin with MATCH.
+     *
+     * <p>Preserves the original Sprint P1 syntax, including
+     * optional WHERE, updating clauses and RETURN.</p>
+     *
+     * @return parser for MATCH-first queries
+     */
+    private Parser<Query> matchStartingQueryParser() {
         return matchClauseParser().flatMap(
                 match -> Parsers.optional(
                         whereClauseParser()
@@ -156,6 +189,40 @@ public final class CyphailParser {
                                                                 returnClause
                                                         )
                                                 )
+                                )
+                        )
+                )
+        );
+    }
+
+    /**
+     * Parses standalone CREATE queries without MATCH.
+     *
+     * <p>The first CREATE is mandatory. Additional update
+     * clauses and an optional RETURN may follow it.</p>
+     *
+     * @return parser for CREATE-first queries
+     */
+    private Parser<Query> createStartingQueryParser() {
+        return createClauseParser().flatMap(
+                firstCreate -> Parsers.many(
+                        updatingClauseParser()
+                ).flatMap(
+                        followingUpdates -> Parsers.optional(
+                                returnClauseParser()
+                        ).flatMap(
+                                returnClause -> Parsers.token(
+                                        TokenType.EOF
+                                ).map(
+                                        eof -> new Query(
+                                                null,
+                                                Optional.empty(),
+                                                prepend(
+                                                        firstCreate,
+                                                        followingUpdates
+                                                ),
+                                                returnClause
+                                        )
                                 )
                         )
                 )
@@ -717,7 +784,7 @@ public final class CyphailParser {
                         )
                 );
 
-        // Sprint P2: parse decimal literals as immutable AST nodes.
+        // Sprint P2: decimal literals.
         Parser<Expression> decimal =
                 Parsers.token(
                         TokenType.FLOAT
@@ -809,6 +876,7 @@ public final class CyphailParser {
         List<T> values = new ArrayList<>();
         values.add(first);
         values.addAll(rest);
+
         return List.copyOf(values);
     }
 

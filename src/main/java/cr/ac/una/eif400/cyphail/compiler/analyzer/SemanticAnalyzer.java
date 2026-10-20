@@ -30,7 +30,8 @@ import java.util.Set;
  * according to the order in which query clauses appear.</p>
  *
  * <p>Sprint P2 extends the analysis with relationship
- * variables and additional static semantic restrictions.</p>
+ * variables, additional static semantic restrictions,
+ * and standalone CREATE statements without MATCH.</p>
  *
  * <p>Sprint P2 rules:</p>
  * <ul>
@@ -42,11 +43,15 @@ import java.util.Set;
  *     <li>Node variables may be reused for joins.</li>
  *     <li>Relationship properties may reference previously
  *         declared variables.</li>
+ *     <li>Standalone CREATE statements do not require
+ *         a preceding MATCH clause.</li>
  * </ul>
  *
- * <p>The analyzer processes MATCH, WHERE, updating clauses
- * and RETURN in source order. Pattern paths are traversed
- * from their first node through each relationship step.</p>
+ * <p>The analyzer processes MATCH when present, followed
+ * by WHERE, updating clauses and RETURN in source order.</p>
+ *
+ * <p>Pattern paths are traversed from their first node
+ * through each relationship step.</p>
  *
  * <p>The symbol table includes both node and relationship
  * variables, while separate sets preserve their roles.</p>
@@ -69,8 +74,9 @@ import java.util.Set;
  *     <li>Julissa Solano Valverde</li>
  * </ul>
  *
- * <p>Sprint P2 contribution:
- * Relationship-aware static semantic validation.</p>
+ * <p>Sprint P2 contributions:
+ * Relationship-aware static semantic validation and
+ * support for standalone CREATE statements.</p>
  */
 public final class SemanticAnalyzer {
 
@@ -80,6 +86,9 @@ public final class SemanticAnalyzer {
      * <p>A fresh analysis state is created for every query
      * to prevent variable declarations from leaking between
      * separate invocations.</p>
+     *
+     * <p>Sprint P2 allows queries without MATCH when they
+     * begin with a standalone CREATE clause.</p>
      *
      * @param query query AST
      * @return semantic analysis result
@@ -92,10 +101,21 @@ public final class SemanticAnalyzer {
 
         AnalysisState state = new AnalysisState();
 
-        analyzePattern(
-                query.match().pattern(),
-                state,
-                "MATCH pattern"
+        /*
+         * Sprint P2:
+         * MATCH is optional for standalone CREATE queries.
+         *
+         * If MATCH exists, analyze its pattern normally.
+         * Otherwise, continue with the updating clauses.
+         *
+         * This preserves the original P1 behavior.
+         */
+        query.optionalMatch().ifPresent(
+                match -> analyzePattern(
+                        match.pattern(),
+                        state,
+                        "MATCH pattern"
+                )
         );
 
         query.where().ifPresent(
@@ -134,6 +154,10 @@ public final class SemanticAnalyzer {
 
     /**
      * Analyzes an updating clause in source order.
+     *
+     * <p>CREATE patterns declare node and relationship
+     * variables that can subsequently be used by RETURN
+     * or other supported clauses.</p>
      *
      * @param update updating clause
      * @param state query analysis state

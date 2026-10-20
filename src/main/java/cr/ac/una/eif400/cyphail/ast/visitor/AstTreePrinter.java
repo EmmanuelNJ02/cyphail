@@ -81,8 +81,9 @@ import java.util.Objects;
  *
  * <p>Sprint P2 contribution:
  * Relationship path visualization with backward
- * compatibility for Sprint P1 and support for
- * floating-point literal expressions.</p>
+ * compatibility for Sprint P1, support for
+ * floating-point literal expressions, and
+ * standalone CREATE statements without MATCH.</p>
  */
 public final class AstTreePrinter implements AstVisitor<String> {
 
@@ -107,12 +108,16 @@ public final class AstTreePrinter implements AstVisitor<String> {
 
         output.append("Query{\n");
 
-        output.append(
-                indent(
-                        visitMatchClause(query.match()),
-                        2
-                )
-        );
+        if (query.match() != null) {
+            output.append(
+                    indent(
+                            visitMatchClause(query.match()),
+                            2
+                    )
+            );
+        } else {
+            output.append("  Match: null");
+        }
 
         output.append("\n");
 
