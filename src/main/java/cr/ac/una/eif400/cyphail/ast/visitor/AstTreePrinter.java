@@ -13,6 +13,7 @@ import cr.ac.una.eif400.cyphail.ast.clause.WhereClause;
 import cr.ac.una.eif400.cyphail.ast.expression.BinaryExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.BooleanLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.Expression;
+import cr.ac.una.eif400.cyphail.ast.expression.FloatLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.IntegerLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.NullLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.PropertyExpression;
@@ -56,6 +57,7 @@ import java.util.Objects;
  * <pre>
  * m.year        -> (. m year)
  * m.year > 1990 -> (> (. m year) 1990)
+ * m.price > 9.5 -> (> (. m price) 9.5)
  * </pre>
  *
  * <p>The visitor is independent from the parser and REPL.
@@ -79,7 +81,8 @@ import java.util.Objects;
  *
  * <p>Sprint P2 contribution:
  * Relationship path visualization with backward
- * compatibility for Sprint P1.</p>
+ * compatibility for Sprint P1 and support for
+ * floating-point literal expressions.</p>
  */
 public final class AstTreePrinter implements AstVisitor<String> {
 
@@ -527,6 +530,16 @@ public final class AstTreePrinter implements AstVisitor<String> {
         return "NULL";
     }
 
+    /**
+     * Renders an expression according to its AST type.
+     *
+     * <p>Sprint P2 adds support for FloatLiteralExpression.
+     * Existing expression types retain their original
+     * representation.</p>
+     *
+     * @param expression expression to render
+     * @return textual representation
+     */
     private String visitExpression(
             Expression expression
     ) {
@@ -544,6 +557,10 @@ public final class AstTreePrinter implements AstVisitor<String> {
 
         if (expression instanceof IntegerLiteralExpression integer) {
             return visitIntegerLiteralExpression(integer);
+        }
+
+        if (expression instanceof FloatLiteralExpression decimal) {
+            return Double.toString(decimal.value());
         }
 
         if (expression instanceof StringLiteralExpression string) {

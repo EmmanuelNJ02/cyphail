@@ -16,6 +16,7 @@ import cr.ac.una.eif400.cyphail.ast.expression.BinaryExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.BinaryOperator;
 import cr.ac.una.eif400.cyphail.ast.expression.BooleanLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.Expression;
+import cr.ac.una.eif400.cyphail.ast.expression.FloatLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.IntegerLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.NullLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.PropertyExpression;
@@ -716,6 +717,18 @@ public final class CyphailParser {
                         )
                 );
 
+        // Sprint P2: parse decimal literals as immutable AST nodes.
+        Parser<Expression> decimal =
+                Parsers.token(
+                        TokenType.FLOAT
+                ).map(
+                        token -> new FloatLiteralExpression(
+                                Double.parseDouble(
+                                        token.lexeme()
+                                )
+                        )
+                );
+
         Parser<Expression> string =
                 Parsers.token(
                         TokenType.STRING
@@ -758,12 +771,15 @@ public final class CyphailParser {
         return Parsers.or(
                 integer,
                 Parsers.or(
-                        string,
+                        decimal,
                         Parsers.or(
-                                trueLiteral,
+                                string,
                                 Parsers.or(
-                                        falseLiteral,
-                                        nullLiteral
+                                        trueLiteral,
+                                        Parsers.or(
+                                                falseLiteral,
+                                                nullLiteral
+                                        )
                                 )
                         )
                 )
