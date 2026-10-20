@@ -8,6 +8,8 @@ import cr.ac.una.eif400.cyphail.ast.clause.Projection;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionItem;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionModifiers;
 import cr.ac.una.eif400.cyphail.ast.clause.ReturnClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetProperty;
 import cr.ac.una.eif400.cyphail.ast.clause.SortDirection;
 import cr.ac.una.eif400.cyphail.ast.clause.SortItem;
 import cr.ac.una.eif400.cyphail.ast.clause.UpdatingClause;
@@ -55,8 +57,9 @@ import java.util.Optional;
  * paths, relationship properties and the directions IN, OUT
  * and NONE. The original Sprint P1 parsing behavior is preserved.</p>
  *
- * <p>Sprint P2 also supports decimal literals and standalone
- * CREATE statements without a preceding MATCH clause.</p>
+ * <p>Sprint P2 also supports decimal literals, standalone
+ * CREATE statements without a preceding MATCH clause,
+ * and SET assignments to node or relationship properties.</p>
  *
  * <p>Project: Cyphail - Sprint P2</p>
  * <p>Course: EIF400 - Paradigmas de Programacion</p>
@@ -245,9 +248,22 @@ public final class CyphailParser {
                 );
     }
 
+    /**
+     * Parses supported updating clauses.
+     *
+     * <p>Sprint P2 adds SET while preserving
+     * CREATE and DELETE.</p>
+     *
+     * @return parser for an updating clause
+     */
     private Parser<UpdatingClause> updatingClauseParser() {
         Parser<UpdatingClause> create =
                 createClauseParser().map(
+                        clause -> clause
+                );
+
+        Parser<UpdatingClause> set =
+                setClauseParser().map(
                         clause -> clause
                 );
 
@@ -256,7 +272,10 @@ public final class CyphailParser {
                         clause -> clause
                 );
 
-        return Parsers.or(create, delete);
+        return Parsers.or(
+                create,
+                Parsers.or(set, delete)
+        );
     }
 
     private Parser<CreateClause> createClauseParser() {
@@ -265,6 +284,50 @@ public final class CyphailParser {
                         create -> patternParser()
                                 .map(CreateClause::new)
                 );
+    }
+
+    /**
+     * Parses a SET assignment for a node or relationship property.
+     *
+     * <p>Examples:</p>
+     * <pre>
+     * SET p.precio = 19.99
+     * SET r.grade = 9.5
+     * </pre>
+     *
+     * <p>The AST stores the assignment as a SetProperty
+     * inside the original SetClause items collection.</p>
+     *
+     * @return parser for a SET clause
+     */
+    private Parser<SetClause> setClauseParser() {
+        return Parsers.token(TokenType.SET).flatMap(
+                set -> identifierNameParser().flatMap(
+                        variable -> Parsers.token(
+                                TokenType.DOT
+                        ).flatMap(
+                                dot -> identifierNameParser().flatMap(
+                                        property -> Parsers.token(
+                                                TokenType.EQUAL
+                                        ).flatMap(
+                                                equal -> expressionParser().map(
+                                                        value -> new SetClause(
+                                                                List.of(
+                                                                        new SetProperty(
+                                                                                new PropertyExpression(
+                                                                                        new VariableExpression(variable),
+                                                                                        property
+                                                                                ),
+                                                                                value
+                                                                        )
+                                                                )
+                                                        )
+                                                )
+                                        )
+                                )
+                        )
+                )
+        );
     }
 
     private Parser<DeleteClause> deleteClauseParser() {
@@ -476,11 +539,11 @@ public final class CyphailParser {
                                 items -> projectionModifiersParser()
                                         .map(
                                                 modifiers ->
-                                                        new Projection(
-                                                                true,
-                                                                items,
-                                                                modifiers
-                                                        )
+                                                new Projection(
+                                                        true,
+                                                        items,
+                                                        modifiers
+                                                )
                                         )
                         )
                 );

@@ -4,6 +4,11 @@ import cr.ac.una.eif400.cyphail.ast.Query;
 import cr.ac.una.eif400.cyphail.ast.clause.CreateClause;
 import cr.ac.una.eif400.cyphail.ast.clause.DeleteClause;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionItem;
+import cr.ac.una.eif400.cyphail.ast.clause.SetAllProperties;
+import cr.ac.una.eif400.cyphail.ast.clause.SetClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetItem;
+import cr.ac.una.eif400.cyphail.ast.clause.SetLabels;
+import cr.ac.una.eif400.cyphail.ast.clause.SetProperty;
 import cr.ac.una.eif400.cyphail.ast.clause.UpdatingClause;
 import cr.ac.una.eif400.cyphail.ast.expression.BinaryExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.Expression;
@@ -31,7 +36,8 @@ import java.util.Set;
  *
  * <p>Sprint P2 extends the analysis with relationship
  * variables, additional static semantic restrictions,
- * and standalone CREATE statements without MATCH.</p>
+ * standalone CREATE statements without MATCH, and SET
+ * assignments to node and relationship properties.</p>
  *
  * <p>Sprint P2 rules:</p>
  * <ul>
@@ -45,6 +51,8 @@ import java.util.Set;
  *         declared variables.</li>
  *     <li>Standalone CREATE statements do not require
  *         a preceding MATCH clause.</li>
+ *     <li>SET assignments must reference previously
+ *         declared variables.</li>
  * </ul>
  *
  * <p>The analyzer processes MATCH when present, followed
@@ -75,8 +83,8 @@ import java.util.Set;
  * </ul>
  *
  * <p>Sprint P2 contributions:
- * Relationship-aware static semantic validation and
- * support for standalone CREATE statements.</p>
+ * Relationship-aware static semantic validation,
+ * standalone CREATE statements and SET analysis.</p>
  */
 public final class SemanticAnalyzer {
 
@@ -159,6 +167,8 @@ public final class SemanticAnalyzer {
      * variables that can subsequently be used by RETURN
      * or other supported clauses.</p>
      *
+     * <p>Sprint P2 also validates SET assignments.</p>
+     *
      * @param update updating clause
      * @param state query analysis state
      */
@@ -175,6 +185,16 @@ public final class SemanticAnalyzer {
             return;
         }
 
+        if (update instanceof SetClause setClause) {
+            for (SetItem item : setClause.items()) {
+                analyzeSetItem(
+                        item,
+                        state
+                );
+            }
+            return;
+        }
+
         if (update instanceof DeleteClause deleteClause) {
             for (Expression expression
                     : deleteClause.expressions()) {
@@ -186,6 +206,65 @@ public final class SemanticAnalyzer {
                 );
             }
         }
+    }
+
+    /**
+     * Validates a SET item according to its AST type.
+     *
+     * <p>Property assignments validate both the target
+     * and assigned value. The other existing SET item
+     * types are also preserved and analyzed.</p>
+     *
+     * @param item SET item
+     * @param state query analysis state
+     */
+    private void analyzeSetItem(
+            SetItem item,
+            AnalysisState state
+    ) {
+        if (item instanceof SetProperty property) {
+            analyzeExpression(
+                    property.property(),
+                    state,
+                    "SET target"
+            );
+
+            analyzeExpression(
+                    property.value(),
+                    state,
+                    "SET value"
+            );
+            return;
+        }
+
+        if (item instanceof SetAllProperties allProperties) {
+            analyzeExpression(
+                    allProperties.variable(),
+                    state,
+                    "SET target"
+            );
+
+            analyzeExpression(
+                    allProperties.value(),
+                    state,
+                    "SET value"
+            );
+            return;
+        }
+
+        if (item instanceof SetLabels labels) {
+            analyzeExpression(
+                    labels.variable(),
+                    state,
+                    "SET target"
+            );
+            return;
+        }
+
+        throw new IllegalArgumentException(
+                "Unsupported SET item type: "
+                        + item.getClass().getName()
+        );
     }
 
     /**

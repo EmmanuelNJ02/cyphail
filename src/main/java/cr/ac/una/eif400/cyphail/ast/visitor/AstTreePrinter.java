@@ -8,6 +8,11 @@ import cr.ac.una.eif400.cyphail.ast.clause.MatchClause;
 import cr.ac.una.eif400.cyphail.ast.clause.Projection;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionItem;
 import cr.ac.una.eif400.cyphail.ast.clause.ReturnClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetAllProperties;
+import cr.ac.una.eif400.cyphail.ast.clause.SetClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetItem;
+import cr.ac.una.eif400.cyphail.ast.clause.SetLabels;
+import cr.ac.una.eif400.cyphail.ast.clause.SetProperty;
 import cr.ac.una.eif400.cyphail.ast.clause.UpdatingClause;
 import cr.ac.una.eif400.cyphail.ast.clause.WhereClause;
 import cr.ac.una.eif400.cyphail.ast.expression.BinaryExpression;
@@ -60,6 +65,9 @@ import java.util.Objects;
  * m.price > 9.5 -> (> (. m price) 9.5)
  * </pre>
  *
+ * <p>Sprint P2 additionally renders SET clauses for
+ * node and relationship property assignments.</p>
+ *
  * <p>The visitor is independent from the parser and REPL.
  * It receives an existing AST and produces its logical
  * textual representation.</p>
@@ -82,8 +90,9 @@ import java.util.Objects;
  * <p>Sprint P2 contribution:
  * Relationship path visualization with backward
  * compatibility for Sprint P1, support for
- * floating-point literal expressions, and
- * standalone CREATE statements without MATCH.</p>
+ * floating-point literal expressions,
+ * standalone CREATE statements without MATCH,
+ * and SET clause visualization.</p>
  */
 public final class AstTreePrinter implements AstVisitor<String> {
 
@@ -211,6 +220,69 @@ public final class AstTreePrinter implements AstVisitor<String> {
                 }""".formatted(
                 clause.detach(),
                 String.join(", ", expressions)
+        );
+    }
+
+    /**
+     * Renders the SET items in their original order.
+     *
+     * <p>SET uses the existing SetClause and SetItem
+     * AST structure.</p>
+     *
+     * @param clause SET clause
+     * @return formatted SET clause
+     */
+    private String renderSetClause(SetClause clause) {
+        List<String> items = clause.items()
+                .stream()
+                .map(this::renderSetItem)
+                .toList();
+
+        return """
+                Set:{
+                  Items: [%s]
+                }""".formatted(
+                String.join(", ", items)
+        );
+    }
+
+    /**
+     * Renders an individual SET item.
+     *
+     * <p>Property assignments work for both node
+     * and relationship variables.</p>
+     *
+     * @param item SET item
+     * @return formatted SET item
+     */
+    private String renderSetItem(SetItem item) {
+        if (item instanceof SetProperty property) {
+            return "{Property: "
+                    + visitExpression(property.property())
+                    + ", Value: "
+                    + visitExpression(property.value())
+                    + "}";
+        }
+
+        if (item instanceof SetAllProperties allProperties) {
+            return "{Variable: "
+                    + visitExpression(allProperties.variable())
+                    + ", Value: "
+                    + visitExpression(allProperties.value())
+                    + "}";
+        }
+
+        if (item instanceof SetLabels labels) {
+            return "{Variable: "
+                    + visitExpression(labels.variable())
+                    + ", Labels: ["
+                    + String.join(", ", labels.labels())
+                    + "]}";
+        }
+
+        throw new IllegalArgumentException(
+                "Unsupported SET item type: "
+                        + item.getClass().getName()
         );
     }
 
@@ -623,11 +695,24 @@ public final class AstTreePrinter implements AstVisitor<String> {
         return output.toString();
     }
 
+    /**
+     * Selects the renderer for each updating clause.
+     *
+     * <p>Sprint P2 adds SET while retaining CREATE
+     * and DELETE behavior.</p>
+     *
+     * @param update updating clause
+     * @return formatted clause
+     */
     private String visitUpdatingClause(
             UpdatingClause update
     ) {
         if (update instanceof CreateClause create) {
             return visitCreateClause(create);
+        }
+
+        if (update instanceof SetClause set) {
+            return renderSetClause(set);
         }
 
         if (update instanceof DeleteClause delete) {

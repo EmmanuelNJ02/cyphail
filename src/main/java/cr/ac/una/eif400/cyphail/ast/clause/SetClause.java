@@ -13,11 +13,18 @@ import java.util.Objects;
  * <pre>
  * SET p.age = 30
  * SET p.age = 30, p:Employee
+ * SET p.precio = 19.99
+ * SET r.grade = 9.5
  * </pre>
  *
- * <p>Project: Cyphail</p>
+ * <p>Sprint P2 supports property assignments for both
+ * node and relationship variables while preserving
+ * the original SET item representation.</p>
+ *
+ * <p>Project: Cyphail - Sprint P2</p>
  * <p>Course: EIF400 - Paradigmas de Programacion</p>
- * <p>Universidad Nacional de Costa Rica - Escuela de Informatica</p>
+ * <p>Universidad Nacional de Costa Rica</p>
+ * <p>Escuela de Informatica</p>
  * <p>Group Code: 04-10am</p>
  *
  * <p>Authors:</p>
@@ -35,6 +42,9 @@ public record SetClause(
         List<SetItem> items
 ) implements UpdatingClause {
 
+    /**
+     * Validates and preserves the immutable SET items.
+     */
     public SetClause {
         Objects.requireNonNull(
                 items,
