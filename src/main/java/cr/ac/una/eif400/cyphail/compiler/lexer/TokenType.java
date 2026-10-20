@@ -3,14 +3,17 @@ package cr.ac.una.eif400.cyphail.compiler.lexer;
 /**
  * Defines the token categories recognized by the Cyphail lexer.
  *
- * <p>The token types are used by the lexer to transform Cyphail source
- * text into a token stream that can later be consumed by the functional
- * parser combinators.</p>
+ * The token types represent keywords, identifiers, numeric
+ * literals, string literals, delimiters and operators.
  *
- * <p>Project: Cyphail - Sprint P1<br>
- * Course: EIF400 - Paradigmas de Programacion<br>
- * Universidad Nacional de Costa Rica<br>
- * Group: 04-10am</p>
+ * Sprint P2 introduces FLOAT to support decimal values
+ * such as 19.99 and 9.5 while preserving INTEGER tokens.
+ *
+ * Project: Cyphail - Sprint P2
+ * Course: EIF400 - Programming Paradigms
+ * University: National University of Costa Rica
+ * School: School of Informatics
+ * Group Code: 04-10am
  *
  * @author Emmanuel Nunez Jimenez
  * @author Keynell Molina Mora
@@ -48,6 +51,7 @@ public enum TokenType {
     // Values
     IDENTIFIER,
     INTEGER,
+    FLOAT,
     STRING,
 
     // Delimiters

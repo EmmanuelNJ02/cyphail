@@ -4,6 +4,12 @@ import cr.ac.una.eif400.cyphail.ast.Query;
 import cr.ac.una.eif400.cyphail.ast.clause.CreateClause;
 import cr.ac.una.eif400.cyphail.ast.clause.DeleteClause;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionItem;
+import cr.ac.una.eif400.cyphail.ast.clause.RemoveClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetAllProperties;
+import cr.ac.una.eif400.cyphail.ast.clause.SetClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetItem;
+import cr.ac.una.eif400.cyphail.ast.clause.SetLabels;
+import cr.ac.una.eif400.cyphail.ast.clause.SetProperty;
 import cr.ac.una.eif400.cyphail.ast.clause.UpdatingClause;
 import cr.ac.una.eif400.cyphail.ast.expression.BinaryExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.Expression;
@@ -30,7 +36,9 @@ import java.util.Set;
  * according to the order in which query clauses appear.</p>
  *
  * <p>Sprint P2 extends the analysis with relationship
- * variables and additional static semantic restrictions.</p>
+ * variables, additional static semantic restrictions,
+ * standalone CREATE statements without MATCH,
+ * SET assignments and REMOVE property clauses.</p>
  *
  * <p>Sprint P2 rules:</p>
  * <ul>
@@ -42,11 +50,19 @@ import java.util.Set;
  *     <li>Node variables may be reused for joins.</li>
  *     <li>Relationship properties may reference previously
  *         declared variables.</li>
+ *     <li>Standalone CREATE statements do not require
+ *         a preceding MATCH clause.</li>
+ *     <li>SET assignments must reference previously
+ *         declared variables.</li>
+ *     <li>REMOVE properties must reference previously
+ *         declared node or relationship variables.</li>
  * </ul>
  *
- * <p>The analyzer processes MATCH, WHERE, updating clauses
- * and RETURN in source order. Pattern paths are traversed
- * from their first node through each relationship step.</p>
+ * <p>The analyzer processes MATCH when present, followed
+ * by WHERE, updating clauses and RETURN in source order.</p>
+ *
+ * <p>Pattern paths are traversed from their first node
+ * through each relationship step.</p>
  *
  * <p>The symbol table includes both node and relationship
  * variables, while separate sets preserve their roles.</p>
@@ -69,8 +85,10 @@ import java.util.Set;
  *     <li>Julissa Solano Valverde</li>
  * </ul>
  *
- * <p>Sprint P2 contribution:
- * Relationship-aware static semantic validation.</p>
+ * <p>Sprint P2 contributions:
+ * Relationship-aware static semantic validation,
+ * standalone CREATE statements, SET analysis
+ * and REMOVE analysis.</p>
  */
 public final class SemanticAnalyzer {
 
@@ -80,6 +98,9 @@ public final class SemanticAnalyzer {
      * <p>A fresh analysis state is created for every query
      * to prevent variable declarations from leaking between
      * separate invocations.</p>
+     *
+     * <p>Sprint P2 allows queries without MATCH when they
+     * begin with a standalone CREATE clause.</p>
      *
      * @param query query AST
      * @return semantic analysis result
@@ -92,10 +113,21 @@ public final class SemanticAnalyzer {
 
         AnalysisState state = new AnalysisState();
 
-        analyzePattern(
-                query.match().pattern(),
-                state,
-                "MATCH pattern"
+        /*
+         * Sprint P2:
+         * MATCH is optional for standalone CREATE queries.
+         *
+         * If MATCH exists, analyze its pattern normally.
+         * Otherwise, continue with the updating clauses.
+         *
+         * This preserves the original P1 behavior.
+         */
+        query.optionalMatch().ifPresent(
+                match -> analyzePattern(
+                        match.pattern(),
+                        state,
+                        "MATCH pattern"
+                )
         );
 
         query.where().ifPresent(
@@ -135,6 +167,10 @@ public final class SemanticAnalyzer {
     /**
      * Analyzes an updating clause in source order.
      *
+     * <p>CREATE declares node and relationship variables.
+     * SET and REMOVE reference previously declared variables.
+     * DELETE validates its target expressions.</p>
+     *
      * @param update updating clause
      * @param state query analysis state
      */
@@ -151,6 +187,29 @@ public final class SemanticAnalyzer {
             return;
         }
 
+        if (update instanceof SetClause setClause) {
+            for (SetItem item : setClause.items()) {
+                analyzeSetItem(
+                        item,
+                        state
+                );
+            }
+            return;
+        }
+
+        if (update instanceof RemoveClause removeClause) {
+            for (PropertyExpression property
+                    : removeClause.properties()) {
+
+                analyzeExpression(
+                        property,
+                        state,
+                        "REMOVE clause"
+                );
+            }
+            return;
+        }
+
         if (update instanceof DeleteClause deleteClause) {
             for (Expression expression
                     : deleteClause.expressions()) {
@@ -162,6 +221,65 @@ public final class SemanticAnalyzer {
                 );
             }
         }
+    }
+
+    /**
+     * Validates a SET item according to its AST type.
+     *
+     * <p>Property assignments validate both the target
+     * and assigned value. The other existing SET item
+     * types are also preserved and analyzed.</p>
+     *
+     * @param item SET item
+     * @param state query analysis state
+     */
+    private void analyzeSetItem(
+            SetItem item,
+            AnalysisState state
+    ) {
+        if (item instanceof SetProperty property) {
+            analyzeExpression(
+                    property.property(),
+                    state,
+                    "SET target"
+            );
+
+            analyzeExpression(
+                    property.value(),
+                    state,
+                    "SET value"
+            );
+            return;
+        }
+
+        if (item instanceof SetAllProperties allProperties) {
+            analyzeExpression(
+                    allProperties.variable(),
+                    state,
+                    "SET target"
+            );
+
+            analyzeExpression(
+                    allProperties.value(),
+                    state,
+                    "SET value"
+            );
+            return;
+        }
+
+        if (item instanceof SetLabels labels) {
+            analyzeExpression(
+                    labels.variable(),
+                    state,
+                    "SET target"
+            );
+            return;
+        }
+
+        throw new IllegalArgumentException(
+                "Unsupported SET item type: "
+                        + item.getClass().getName()
+        );
     }
 
     /**

@@ -7,12 +7,19 @@ import cr.ac.una.eif400.cyphail.ast.clause.DeleteClause;
 import cr.ac.una.eif400.cyphail.ast.clause.MatchClause;
 import cr.ac.una.eif400.cyphail.ast.clause.Projection;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionItem;
+import cr.ac.una.eif400.cyphail.ast.clause.RemoveClause;
 import cr.ac.una.eif400.cyphail.ast.clause.ReturnClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetAllProperties;
+import cr.ac.una.eif400.cyphail.ast.clause.SetClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetItem;
+import cr.ac.una.eif400.cyphail.ast.clause.SetLabels;
+import cr.ac.una.eif400.cyphail.ast.clause.SetProperty;
 import cr.ac.una.eif400.cyphail.ast.clause.UpdatingClause;
 import cr.ac.una.eif400.cyphail.ast.clause.WhereClause;
 import cr.ac.una.eif400.cyphail.ast.expression.BinaryExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.BooleanLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.Expression;
+import cr.ac.una.eif400.cyphail.ast.expression.FloatLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.IntegerLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.NullLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.PropertyExpression;
@@ -56,7 +63,11 @@ import java.util.Objects;
  * <pre>
  * m.year        -> (. m year)
  * m.year > 1990 -> (> (. m year) 1990)
+ * m.price > 9.5 -> (> (. m price) 9.5)
  * </pre>
+ *
+ * <p>Sprint P2 additionally renders SET and REMOVE
+ * clauses for node and relationship properties.</p>
  *
  * <p>The visitor is independent from the parser and REPL.
  * It receives an existing AST and produces its logical
@@ -79,7 +90,11 @@ import java.util.Objects;
  *
  * <p>Sprint P2 contribution:
  * Relationship path visualization with backward
- * compatibility for Sprint P1.</p>
+ * compatibility for Sprint P1, support for
+ * floating-point literal expressions,
+ * standalone CREATE statements without MATCH,
+ * SET clause visualization and REMOVE clause
+ * visualization.</p>
  */
 public final class AstTreePrinter implements AstVisitor<String> {
 
@@ -104,12 +119,16 @@ public final class AstTreePrinter implements AstVisitor<String> {
 
         output.append("Query{\n");
 
-        output.append(
-                indent(
-                        visitMatchClause(query.match()),
-                        2
-                )
-        );
+        if (query.match() != null) {
+            output.append(
+                    indent(
+                            visitMatchClause(query.match()),
+                            2
+                    )
+            );
+        } else {
+            output.append("  Match: null");
+        }
 
         output.append("\n");
 
@@ -203,6 +222,101 @@ public final class AstTreePrinter implements AstVisitor<String> {
                 }""".formatted(
                 clause.detach(),
                 String.join(", ", expressions)
+        );
+    }
+
+    /**
+     * Renders the SET items in their original order.
+     *
+     * <p>SET uses the existing SetClause and SetItem
+     * AST structure.</p>
+     *
+     * @param clause SET clause
+     * @return formatted SET clause
+     */
+    private String renderSetClause(SetClause clause) {
+        List<String> items = clause.items()
+                .stream()
+                .map(this::renderSetItem)
+                .toList();
+
+        return """
+                Set:{
+                  Items: [%s]
+                }""".formatted(
+                String.join(", ", items)
+        );
+    }
+
+    /**
+     * Renders an individual SET item.
+     *
+     * <p>Property assignments work for both node
+     * and relationship variables.</p>
+     *
+     * @param item SET item
+     * @return formatted SET item
+     */
+    private String renderSetItem(SetItem item) {
+        if (item instanceof SetProperty property) {
+            return "{Property: "
+                    + visitExpression(property.property())
+                    + ", Value: "
+                    + visitExpression(property.value())
+                    + "}";
+        }
+
+        if (item instanceof SetAllProperties allProperties) {
+            return "{Variable: "
+                    + visitExpression(allProperties.variable())
+                    + ", Value: "
+                    + visitExpression(allProperties.value())
+                    + "}";
+        }
+
+        if (item instanceof SetLabels labels) {
+            return "{Variable: "
+                    + visitExpression(labels.variable())
+                    + ", Labels: ["
+                    + String.join(", ", labels.labels())
+                    + "]}";
+        }
+
+        throw new IllegalArgumentException(
+                "Unsupported SET item type: "
+                        + item.getClass().getName()
+        );
+    }
+
+    /**
+     * Renders a REMOVE clause for node or relationship
+     * properties.
+     *
+     * <p>Examples:</p>
+     * <pre>
+     * REMOVE p.discount
+     * REMOVE r.grade
+     * REMOVE p.discount, p.oldPrice
+     * </pre>
+     *
+     * <p>All properties are displayed in their original
+     * source order, using the existing expression
+     * rendering format.</p>
+     *
+     * @param clause REMOVE clause
+     * @return formatted REMOVE clause
+     */
+    private String renderRemoveClause(RemoveClause clause) {
+        List<String> properties = clause.properties()
+                .stream()
+                .map(this::visitPropertyExpression)
+                .toList();
+
+        return """
+                Remove:{
+                  Properties: [%s]
+                }""".formatted(
+                String.join(", ", properties)
         );
     }
 
@@ -527,6 +641,16 @@ public final class AstTreePrinter implements AstVisitor<String> {
         return "NULL";
     }
 
+    /**
+     * Renders an expression according to its AST type.
+     *
+     * <p>Sprint P2 adds support for FloatLiteralExpression.
+     * Existing expression types retain their original
+     * representation.</p>
+     *
+     * @param expression expression to render
+     * @return textual representation
+     */
     private String visitExpression(
             Expression expression
     ) {
@@ -544,6 +668,10 @@ public final class AstTreePrinter implements AstVisitor<String> {
 
         if (expression instanceof IntegerLiteralExpression integer) {
             return visitIntegerLiteralExpression(integer);
+        }
+
+        if (expression instanceof FloatLiteralExpression decimal) {
+            return Double.toString(decimal.value());
         }
 
         if (expression instanceof StringLiteralExpression string) {
@@ -601,11 +729,28 @@ public final class AstTreePrinter implements AstVisitor<String> {
         return output.toString();
     }
 
+    /**
+     * Selects the renderer for each updating clause.
+     *
+     * <p>Sprint P2 adds SET and REMOVE while retaining
+     * CREATE and DELETE behavior.</p>
+     *
+     * @param update updating clause
+     * @return formatted clause
+     */
     private String visitUpdatingClause(
             UpdatingClause update
     ) {
         if (update instanceof CreateClause create) {
             return visitCreateClause(create);
+        }
+
+        if (update instanceof SetClause set) {
+            return renderSetClause(set);
+        }
+
+        if (update instanceof RemoveClause remove) {
+            return renderRemoveClause(remove);
         }
 
         if (update instanceof DeleteClause delete) {

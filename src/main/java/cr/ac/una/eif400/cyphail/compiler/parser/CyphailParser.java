@@ -7,7 +7,10 @@ import cr.ac.una.eif400.cyphail.ast.clause.MatchClause;
 import cr.ac.una.eif400.cyphail.ast.clause.Projection;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionItem;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionModifiers;
+import cr.ac.una.eif400.cyphail.ast.clause.RemoveClause;
 import cr.ac.una.eif400.cyphail.ast.clause.ReturnClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetClause;
+import cr.ac.una.eif400.cyphail.ast.clause.SetProperty;
 import cr.ac.una.eif400.cyphail.ast.clause.SortDirection;
 import cr.ac.una.eif400.cyphail.ast.clause.SortItem;
 import cr.ac.una.eif400.cyphail.ast.clause.UpdatingClause;
@@ -16,6 +19,7 @@ import cr.ac.una.eif400.cyphail.ast.expression.BinaryExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.BinaryOperator;
 import cr.ac.una.eif400.cyphail.ast.expression.BooleanLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.Expression;
+import cr.ac.una.eif400.cyphail.ast.expression.FloatLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.IntegerLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.NullLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.PropertyExpression;
@@ -54,6 +58,10 @@ import java.util.Optional;
  * paths, relationship properties and the directions IN, OUT
  * and NONE. The original Sprint P1 parsing behavior is preserved.</p>
  *
+ * <p>Sprint P2 also supports decimal literals, standalone
+ * CREATE statements without a preceding MATCH clause,
+ * SET assignments and REMOVE property clauses.</p>
+ *
  * <p>Project: Cyphail - Sprint P2</p>
  * <p>Course: EIF400 - Paradigmas de Programacion</p>
  * <p>Universidad Nacional de Costa Rica</p>
@@ -68,9 +76,6 @@ import java.util.Optional;
  *     <li>Keynell Molina Mora</li>
  *     <li>Julissa Solano Valverde</li>
  * </ul>
- *
- * <p>Sprint P2 contribution:
- * Integration of functional relationship path parsing.</p>
  */
 public final class CyphailParser {
 
@@ -102,7 +107,10 @@ public final class CyphailParser {
      * @return parse result containing the Query AST or a failure
      */
     public ParseResult<Query> parse(String source) {
-        Objects.requireNonNull(source, "Source cannot be null");
+        Objects.requireNonNull(
+                source,
+                "Source cannot be null"
+        );
 
         List<Token> tokens = lexer.tokenize(source);
         ParserInput input = ParserInput.from(tokens);
@@ -133,7 +141,37 @@ public final class CyphailParser {
         );
     }
 
+    /**
+     * Selects the query grammar based on the first token.
+     *
+     * <p>Queries starting with CREATE use the Sprint P2
+     * standalone CREATE parser. All other queries follow
+     * the original MATCH-first parser.</p>
+     *
+     * <p>This avoids hiding a syntax error inside a malformed
+     * MATCH query by attempting an unrelated CREATE parser.</p>
+     *
+     * @return parser for a complete query
+     */
     private Parser<Query> queryParser() {
+        return input -> {
+            if (input.current().type() == TokenType.CREATE) {
+                return createStartingQueryParser().parse(input);
+            }
+
+            return matchStartingQueryParser().parse(input);
+        };
+    }
+
+    /**
+     * Parses queries that begin with MATCH.
+     *
+     * <p>Preserves the original Sprint P1 syntax, including
+     * optional WHERE, updating clauses and RETURN.</p>
+     *
+     * @return parser for MATCH-first queries
+     */
+    private Parser<Query> matchStartingQueryParser() {
         return matchClauseParser().flatMap(
                 match -> Parsers.optional(
                         whereClauseParser()
@@ -161,6 +199,40 @@ public final class CyphailParser {
         );
     }
 
+    /**
+     * Parses standalone CREATE queries without MATCH.
+     *
+     * <p>The first CREATE is mandatory. Additional update
+     * clauses and an optional RETURN may follow it.</p>
+     *
+     * @return parser for CREATE-first queries
+     */
+    private Parser<Query> createStartingQueryParser() {
+        return createClauseParser().flatMap(
+                firstCreate -> Parsers.many(
+                        updatingClauseParser()
+                ).flatMap(
+                        followingUpdates -> Parsers.optional(
+                                returnClauseParser()
+                        ).flatMap(
+                                returnClause -> Parsers.token(
+                                        TokenType.EOF
+                                ).map(
+                                        eof -> new Query(
+                                                null,
+                                                Optional.empty(),
+                                                prepend(
+                                                        firstCreate,
+                                                        followingUpdates
+                                                ),
+                                                returnClause
+                                        )
+                                )
+                        )
+                )
+        );
+    }
+
     private Parser<MatchClause> matchClauseParser() {
         return Parsers.token(TokenType.MATCH)
                 .flatMap(
@@ -177,9 +249,27 @@ public final class CyphailParser {
                 );
     }
 
+    /**
+     * Parses supported updating clauses.
+     *
+     * <p>Sprint P2 adds SET and REMOVE while preserving
+     * CREATE and DELETE.</p>
+     *
+     * @return parser for an updating clause
+     */
     private Parser<UpdatingClause> updatingClauseParser() {
         Parser<UpdatingClause> create =
                 createClauseParser().map(
+                        clause -> clause
+                );
+
+        Parser<UpdatingClause> set =
+                setClauseParser().map(
+                        clause -> clause
+                );
+
+        Parser<UpdatingClause> remove =
+                removeClauseParser().map(
                         clause -> clause
                 );
 
@@ -188,7 +278,13 @@ public final class CyphailParser {
                         clause -> clause
                 );
 
-        return Parsers.or(create, delete);
+        return Parsers.or(
+                create,
+                Parsers.or(
+                        set,
+                        Parsers.or(remove, delete)
+                )
+        );
     }
 
     private Parser<CreateClause> createClauseParser() {
@@ -197,6 +293,112 @@ public final class CyphailParser {
                         create -> patternParser()
                                 .map(CreateClause::new)
                 );
+    }
+
+    /**
+     * Parses a SET assignment for a node or relationship property.
+     *
+     * <p>Examples:</p>
+     * <pre>
+     * SET p.precio = 19.99
+     * SET r.grade = 9.5
+     * </pre>
+     *
+     * <p>The AST stores the assignment as a SetProperty
+     * inside the original SetClause items collection.</p>
+     *
+     * @return parser for a SET clause
+     */
+    private Parser<SetClause> setClauseParser() {
+        return Parsers.token(TokenType.SET).flatMap(
+                set -> identifierNameParser().flatMap(
+                        variable -> Parsers.token(
+                                TokenType.DOT
+                        ).flatMap(
+                                dot -> identifierNameParser().flatMap(
+                                        property -> Parsers.token(
+                                                TokenType.EQUAL
+                                        ).flatMap(
+                                                equal -> expressionParser().map(
+                                                        value -> new SetClause(
+                                                                List.of(
+                                                                        new SetProperty(
+                                                                                new PropertyExpression(
+                                                                                        new VariableExpression(variable),
+                                                                                        property
+                                                                                ),
+                                                                                value
+                                                                        )
+                                                                )
+                                                        )
+                                                )
+                                        )
+                                )
+                        )
+                )
+        );
+    }
+
+    /**
+     * Parses a REMOVE clause containing one or more
+     * property references.
+     *
+     * <p>Examples:</p>
+     * <pre>
+     * REMOVE p.discount
+     * REMOVE r.grade
+     * REMOVE p.discount, p.oldPrice
+     * </pre>
+     *
+     * @return parser for a REMOVE clause
+     */
+    private Parser<RemoveClause> removeClauseParser() {
+        return Parsers.token(TokenType.REMOVE).flatMap(
+                remove -> removePropertyParser().flatMap(
+                        first -> Parsers.many(
+                                commaThenRemovePropertyParser()
+                        ).map(
+                                rest -> new RemoveClause(
+                                        prepend(first, rest)
+                                )
+                        )
+                )
+        );
+    }
+
+    /**
+     * Parses a property reference used by REMOVE.
+     *
+     * <p>The property may belong to a node or
+     * relationship variable.</p>
+     *
+     * @return parser for a property expression
+     */
+    private Parser<PropertyExpression> removePropertyParser() {
+        return identifierNameParser().flatMap(
+                variable -> Parsers.token(
+                        TokenType.DOT
+                ).flatMap(
+                        dot -> identifierNameParser().map(
+                                property -> new PropertyExpression(
+                                        new VariableExpression(variable),
+                                        property
+                                )
+                        )
+                )
+        );
+    }
+
+    /**
+     * Parses a comma followed by another REMOVE property.
+     *
+     * @return parser for another property expression
+     */
+    private Parser<PropertyExpression>
+    commaThenRemovePropertyParser() {
+        return Parsers.token(TokenType.COMMA).flatMap(
+                comma -> removePropertyParser()
+        );
     }
 
     private Parser<DeleteClause> deleteClauseParser() {
@@ -716,6 +918,18 @@ public final class CyphailParser {
                         )
                 );
 
+        // Sprint P2: decimal literals.
+        Parser<Expression> decimal =
+                Parsers.token(
+                        TokenType.FLOAT
+                ).map(
+                        token -> new FloatLiteralExpression(
+                                Double.parseDouble(
+                                        token.lexeme()
+                                )
+                        )
+                );
+
         Parser<Expression> string =
                 Parsers.token(
                         TokenType.STRING
@@ -758,12 +972,15 @@ public final class CyphailParser {
         return Parsers.or(
                 integer,
                 Parsers.or(
-                        string,
+                        decimal,
                         Parsers.or(
-                                trueLiteral,
+                                string,
                                 Parsers.or(
-                                        falseLiteral,
-                                        nullLiteral
+                                        trueLiteral,
+                                        Parsers.or(
+                                                falseLiteral,
+                                                nullLiteral
+                                        )
                                 )
                         )
                 )
@@ -793,6 +1010,7 @@ public final class CyphailParser {
         List<T> values = new ArrayList<>();
         values.add(first);
         values.addAll(rest);
+
         return List.copyOf(values);
     }
 
