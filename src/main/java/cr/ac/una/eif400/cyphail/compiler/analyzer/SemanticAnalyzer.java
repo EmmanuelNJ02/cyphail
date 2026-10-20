@@ -4,6 +4,7 @@ import cr.ac.una.eif400.cyphail.ast.Query;
 import cr.ac.una.eif400.cyphail.ast.clause.CreateClause;
 import cr.ac.una.eif400.cyphail.ast.clause.DeleteClause;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionItem;
+import cr.ac.una.eif400.cyphail.ast.clause.RemoveClause;
 import cr.ac.una.eif400.cyphail.ast.clause.SetAllProperties;
 import cr.ac.una.eif400.cyphail.ast.clause.SetClause;
 import cr.ac.una.eif400.cyphail.ast.clause.SetItem;
@@ -36,8 +37,8 @@ import java.util.Set;
  *
  * <p>Sprint P2 extends the analysis with relationship
  * variables, additional static semantic restrictions,
- * standalone CREATE statements without MATCH, and SET
- * assignments to node and relationship properties.</p>
+ * standalone CREATE statements without MATCH,
+ * SET assignments and REMOVE property clauses.</p>
  *
  * <p>Sprint P2 rules:</p>
  * <ul>
@@ -53,6 +54,8 @@ import java.util.Set;
  *         a preceding MATCH clause.</li>
  *     <li>SET assignments must reference previously
  *         declared variables.</li>
+ *     <li>REMOVE properties must reference previously
+ *         declared node or relationship variables.</li>
  * </ul>
  *
  * <p>The analyzer processes MATCH when present, followed
@@ -84,7 +87,8 @@ import java.util.Set;
  *
  * <p>Sprint P2 contributions:
  * Relationship-aware static semantic validation,
- * standalone CREATE statements and SET analysis.</p>
+ * standalone CREATE statements, SET analysis
+ * and REMOVE analysis.</p>
  */
 public final class SemanticAnalyzer {
 
@@ -163,11 +167,9 @@ public final class SemanticAnalyzer {
     /**
      * Analyzes an updating clause in source order.
      *
-     * <p>CREATE patterns declare node and relationship
-     * variables that can subsequently be used by RETURN
-     * or other supported clauses.</p>
-     *
-     * <p>Sprint P2 also validates SET assignments.</p>
+     * <p>CREATE declares node and relationship variables.
+     * SET and REMOVE reference previously declared variables.
+     * DELETE validates its target expressions.</p>
      *
      * @param update updating clause
      * @param state query analysis state
@@ -190,6 +192,19 @@ public final class SemanticAnalyzer {
                 analyzeSetItem(
                         item,
                         state
+                );
+            }
+            return;
+        }
+
+        if (update instanceof RemoveClause removeClause) {
+            for (PropertyExpression property
+                    : removeClause.properties()) {
+
+                analyzeExpression(
+                        property,
+                        state,
+                        "REMOVE clause"
                 );
             }
             return;

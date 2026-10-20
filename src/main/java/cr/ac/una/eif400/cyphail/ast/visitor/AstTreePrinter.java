@@ -7,6 +7,7 @@ import cr.ac.una.eif400.cyphail.ast.clause.DeleteClause;
 import cr.ac.una.eif400.cyphail.ast.clause.MatchClause;
 import cr.ac.una.eif400.cyphail.ast.clause.Projection;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionItem;
+import cr.ac.una.eif400.cyphail.ast.clause.RemoveClause;
 import cr.ac.una.eif400.cyphail.ast.clause.ReturnClause;
 import cr.ac.una.eif400.cyphail.ast.clause.SetAllProperties;
 import cr.ac.una.eif400.cyphail.ast.clause.SetClause;
@@ -65,8 +66,8 @@ import java.util.Objects;
  * m.price > 9.5 -> (> (. m price) 9.5)
  * </pre>
  *
- * <p>Sprint P2 additionally renders SET clauses for
- * node and relationship property assignments.</p>
+ * <p>Sprint P2 additionally renders SET and REMOVE
+ * clauses for node and relationship properties.</p>
  *
  * <p>The visitor is independent from the parser and REPL.
  * It receives an existing AST and produces its logical
@@ -92,7 +93,8 @@ import java.util.Objects;
  * compatibility for Sprint P1, support for
  * floating-point literal expressions,
  * standalone CREATE statements without MATCH,
- * and SET clause visualization.</p>
+ * SET clause visualization and REMOVE clause
+ * visualization.</p>
  */
 public final class AstTreePrinter implements AstVisitor<String> {
 
@@ -283,6 +285,38 @@ public final class AstTreePrinter implements AstVisitor<String> {
         throw new IllegalArgumentException(
                 "Unsupported SET item type: "
                         + item.getClass().getName()
+        );
+    }
+
+    /**
+     * Renders a REMOVE clause for node or relationship
+     * properties.
+     *
+     * <p>Examples:</p>
+     * <pre>
+     * REMOVE p.discount
+     * REMOVE r.grade
+     * REMOVE p.discount, p.oldPrice
+     * </pre>
+     *
+     * <p>All properties are displayed in their original
+     * source order, using the existing expression
+     * rendering format.</p>
+     *
+     * @param clause REMOVE clause
+     * @return formatted REMOVE clause
+     */
+    private String renderRemoveClause(RemoveClause clause) {
+        List<String> properties = clause.properties()
+                .stream()
+                .map(this::visitPropertyExpression)
+                .toList();
+
+        return """
+                Remove:{
+                  Properties: [%s]
+                }""".formatted(
+                String.join(", ", properties)
         );
     }
 
@@ -698,8 +732,8 @@ public final class AstTreePrinter implements AstVisitor<String> {
     /**
      * Selects the renderer for each updating clause.
      *
-     * <p>Sprint P2 adds SET while retaining CREATE
-     * and DELETE behavior.</p>
+     * <p>Sprint P2 adds SET and REMOVE while retaining
+     * CREATE and DELETE behavior.</p>
      *
      * @param update updating clause
      * @return formatted clause
@@ -713,6 +747,10 @@ public final class AstTreePrinter implements AstVisitor<String> {
 
         if (update instanceof SetClause set) {
             return renderSetClause(set);
+        }
+
+        if (update instanceof RemoveClause remove) {
+            return renderRemoveClause(remove);
         }
 
         if (update instanceof DeleteClause delete) {

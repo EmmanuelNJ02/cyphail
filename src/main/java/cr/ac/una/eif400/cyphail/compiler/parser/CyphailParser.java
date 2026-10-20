@@ -7,6 +7,7 @@ import cr.ac.una.eif400.cyphail.ast.clause.MatchClause;
 import cr.ac.una.eif400.cyphail.ast.clause.Projection;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionItem;
 import cr.ac.una.eif400.cyphail.ast.clause.ProjectionModifiers;
+import cr.ac.una.eif400.cyphail.ast.clause.RemoveClause;
 import cr.ac.una.eif400.cyphail.ast.clause.ReturnClause;
 import cr.ac.una.eif400.cyphail.ast.clause.SetClause;
 import cr.ac.una.eif400.cyphail.ast.clause.SetProperty;
@@ -59,7 +60,7 @@ import java.util.Optional;
  *
  * <p>Sprint P2 also supports decimal literals, standalone
  * CREATE statements without a preceding MATCH clause,
- * and SET assignments to node or relationship properties.</p>
+ * SET assignments and REMOVE property clauses.</p>
  *
  * <p>Project: Cyphail - Sprint P2</p>
  * <p>Course: EIF400 - Paradigmas de Programacion</p>
@@ -251,7 +252,7 @@ public final class CyphailParser {
     /**
      * Parses supported updating clauses.
      *
-     * <p>Sprint P2 adds SET while preserving
+     * <p>Sprint P2 adds SET and REMOVE while preserving
      * CREATE and DELETE.</p>
      *
      * @return parser for an updating clause
@@ -267,6 +268,11 @@ public final class CyphailParser {
                         clause -> clause
                 );
 
+        Parser<UpdatingClause> remove =
+                removeClauseParser().map(
+                        clause -> clause
+                );
+
         Parser<UpdatingClause> delete =
                 deleteClauseParser().map(
                         clause -> clause
@@ -274,7 +280,10 @@ public final class CyphailParser {
 
         return Parsers.or(
                 create,
-                Parsers.or(set, delete)
+                Parsers.or(
+                        set,
+                        Parsers.or(remove, delete)
+                )
         );
     }
 
@@ -327,6 +336,68 @@ public final class CyphailParser {
                                 )
                         )
                 )
+        );
+    }
+
+    /**
+     * Parses a REMOVE clause containing one or more
+     * property references.
+     *
+     * <p>Examples:</p>
+     * <pre>
+     * REMOVE p.discount
+     * REMOVE r.grade
+     * REMOVE p.discount, p.oldPrice
+     * </pre>
+     *
+     * @return parser for a REMOVE clause
+     */
+    private Parser<RemoveClause> removeClauseParser() {
+        return Parsers.token(TokenType.REMOVE).flatMap(
+                remove -> removePropertyParser().flatMap(
+                        first -> Parsers.many(
+                                commaThenRemovePropertyParser()
+                        ).map(
+                                rest -> new RemoveClause(
+                                        prepend(first, rest)
+                                )
+                        )
+                )
+        );
+    }
+
+    /**
+     * Parses a property reference used by REMOVE.
+     *
+     * <p>The property may belong to a node or
+     * relationship variable.</p>
+     *
+     * @return parser for a property expression
+     */
+    private Parser<PropertyExpression> removePropertyParser() {
+        return identifierNameParser().flatMap(
+                variable -> Parsers.token(
+                        TokenType.DOT
+                ).flatMap(
+                        dot -> identifierNameParser().map(
+                                property -> new PropertyExpression(
+                                        new VariableExpression(variable),
+                                        property
+                                )
+                        )
+                )
+        );
+    }
+
+    /**
+     * Parses a comma followed by another REMOVE property.
+     *
+     * @return parser for another property expression
+     */
+    private Parser<PropertyExpression>
+    commaThenRemovePropertyParser() {
+        return Parsers.token(TokenType.COMMA).flatMap(
+                comma -> removePropertyParser()
         );
     }
 
@@ -539,11 +610,11 @@ public final class CyphailParser {
                                 items -> projectionModifiersParser()
                                         .map(
                                                 modifiers ->
-                                                new Projection(
-                                                        true,
-                                                        items,
-                                                        modifiers
-                                                )
+                                                        new Projection(
+                                                                true,
+                                                                items,
+                                                                modifiers
+                                                        )
                                         )
                         )
                 );
