@@ -14,19 +14,21 @@ import java.util.List;
 /**
  * Routes REPL input to the appropriate Cyphail command handler.
  *
- * <p>Project: Cyphail</p>
- * <p>Course: EIF400 - Paradigmas de Programacion</p>
- * <p>Universidad Nacional de Costa Rica - Escuela de Informatica</p>
- * <p>Group Code: 04-10am</p>
+ * Supports the existing commands and exposes the current
+ * AST capture state for Sprint P2 multiline processing.
  *
- * <p>Authors:</p>
- * <ul>
- *     <li>Emmanuel Nunez Jimenez</li>
- *     <li>Valery Alfaro Morales</li>
- *     <li>Roy Arias Mejia</li>
- *     <li>Keynell Molina Mora</li>
- *     <li>Julissa Solano Valverde</li>
- * </ul>
+ * Project: Cyphail - Sprint P2
+ * Course: EIF400 - Paradigmas de Programacion
+ * University: Universidad Nacional de Costa Rica
+ * School: Escuela de Informatica
+ * Group Code: 04-10am
+ *
+ * Authors:
+ * Emmanuel Nunez Jimenez
+ * Valery Alfaro Morales
+ * Roy Arias Mejia
+ * Keynell Molina Mora
+ * Julissa Solano Valverde
  *
  * @author Emmanuel Nunez Jimenez
  * @author Valery Alfaro Morales
@@ -38,31 +40,37 @@ public final class CommandRouter {
 
     private final List<CommandHandler> handlers;
 
+    private final TreeCommandHandler treeHandler;
+
     /**
-     * Creates the router and registers the REPL command handlers.
+     * Creates the router and registers the REPL commands.
      *
-     * <p>TreeCommandHandler is registered before FakeQueryHandler so
-     * query lines entered after .tree are captured by the Sprint P1
-     * parser/analyzer flow instead of being executed by the P1.1
-     * fake query engine.</p>
+     * The tree handler is retained so the REPL can check
+     * whether an AST query is currently being captured.
      */
     public CommandRouter() {
         handlers = new ArrayList<>();
 
+        treeHandler = new TreeCommandHandler();
+
         handlers.add(new HelpCommandHandler());
         handlers.add(new AboutCommandHandler());
         handlers.add(new UseCommandHandler());
-        handlers.add(new TreeCommandHandler());
+        handlers.add(treeHandler);
+
+        // Temporary P1 execution handler.
+        // It will be replaced during the final P2
+        // integration with the real Prolog engine.
         handlers.add(new FakeQueryHandler());
+
         handlers.add(new ExitCommandHandler());
     }
 
     /**
-     * Routes the input to the first handler that supports it.
+     * Routes input to the first supporting handler.
      *
-     * @param input input entered by the user
-     * @return true if the REPL should continue running;
-     *         false if it should terminate
+     * @param input user input
+     * @return true if the REPL should continue running
      */
     public boolean route(String input) {
         for (CommandHandler handler : handlers) {
@@ -77,5 +85,19 @@ public final class CommandRouter {
         System.out.println();
 
         return true;
+    }
+
+    /**
+     * Checks whether the AST tree command is waiting
+     * for additional source lines.
+     *
+     * The Sprint P2 REPL uses this state to preserve
+     * existing multiline .tree behavior while handling
+     * semicolon-terminated Cyphail statements.
+     *
+     * @return true while .tree is capturing a query
+     */
+    public boolean isAwaitingTreeQuery() {
+        return treeHandler.isAwaitingQuery();
     }
 }

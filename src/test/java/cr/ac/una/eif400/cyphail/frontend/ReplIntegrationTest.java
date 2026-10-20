@@ -15,20 +15,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Integration tests for complete Cyphail REPL sessions.
  *
- * Project: Cyphail
- * Course: EIF400 - Paradigmas de Programación
+ * Sprint P2 preserves existing REPL commands and requires
+ * Cyphail statements to end with a semicolon.
+ *
+ * Project: Cyphail - Sprint P2
+ * Course: EIF400 - Paradigmas de Programacion
  * University: Universidad Nacional de Costa Rica
- * School: Escuela de Informática
- * Work Group: 04
- * Schedule: 10:00 a.m.
+ * School: Escuela de Informatica
  * Group Code: 04-10am
  *
  * Authors:
- * Emmanuel Núñez Jiménez
+ * Emmanuel Nunez Jimenez
  * Valery Alfaro Morales
  * Roy Arias Mejia
  * Keynell Molina Mora
  * Julissa Solano Valverde
+ *
+ * @author Emmanuel Nunez Jimenez
+ * @author Valery Alfaro Morales
+ * @author Roy Arias Mejia
+ * @author Keynell Molina Mora
+ * @author Julissa Solano Valverde
  */
 class ReplIntegrationTest {
 
@@ -44,7 +51,11 @@ class ReplIntegrationTest {
         output = new ByteArrayOutputStream();
 
         System.setOut(
-                new PrintStream(output, true, StandardCharsets.UTF_8)
+                new PrintStream(
+                        output,
+                        true,
+                        StandardCharsets.UTF_8
+                )
         );
     }
 
@@ -60,9 +71,15 @@ class ReplIntegrationTest {
 
         new Repl().start();
 
-        String result = output.toString(StandardCharsets.UTF_8);
+        String result =
+                output.toString(StandardCharsets.UTF_8);
 
-        assertTrue(result.contains("Welcome to Cyphail-04-10am v.0.1"));
+        assertTrue(
+                result.contains(
+                        "Welcome to Cyphail-04-10am v.0.1"
+                )
+        );
+
         assertTrue(result.contains(">>> "));
         assertTrue(result.contains(".help"));
         assertTrue(result.contains(".about"));
@@ -76,38 +93,64 @@ class ReplIntegrationTest {
 
         new Repl().start();
 
-        String result = output.toString(StandardCharsets.UTF_8);
+        String result =
+                output.toString(StandardCharsets.UTF_8);
 
-        assertTrue(countOccurrences(result, ">>> ") >= 2);
+        assertTrue(
+                countOccurrences(result, ">>> ") >= 2
+        );
     }
 
     @Test
-    void shouldProcessFakeMatchQueryInsideReplSession() {
+    void shouldProcessExistingMatchQueryWithSemicolon() {
         setInput(
-                "MATCH (p:Persona) RETURN p.nombre, p.edad\n"
+                "MATCH (p:Persona) RETURN p.nombre, p.edad;\n"
                         + ".exit\n"
         );
 
         new Repl().start();
 
-        String result = output.toString(StandardCharsets.UTF_8);
+        String result =
+                output.toString(StandardCharsets.UTF_8);
 
         assertTrue(result.contains("p.nombre"));
         assertTrue(result.contains("p.edad"));
         assertTrue(result.contains("Ana"));
         assertTrue(result.contains("28"));
-        assertTrue(result.contains("OK. Query available after 42 ms."));
-    }
 
-    private void setInput(String commands) {
-        System.setIn(
-                new ByteArrayInputStream(
-                        commands.getBytes(StandardCharsets.UTF_8)
+        assertTrue(
+                result.contains(
+                        "OK. Query available after 42 ms."
                 )
         );
     }
 
-    private int countOccurrences(String text, String value) {
+    /**
+     * Replaces the standard input with test commands.
+     *
+     * @param commands complete REPL input sequence
+     */
+    private void setInput(String commands) {
+        System.setIn(
+                new ByteArrayInputStream(
+                        commands.getBytes(
+                                StandardCharsets.UTF_8
+                        )
+                )
+        );
+    }
+
+    /**
+     * Counts occurrences of a specific string.
+     *
+     * @param text text to inspect
+     * @param value searched text
+     * @return occurrence count
+     */
+    private int countOccurrences(
+            String text,
+            String value
+    ) {
         int count = 0;
         int index = 0;
 
