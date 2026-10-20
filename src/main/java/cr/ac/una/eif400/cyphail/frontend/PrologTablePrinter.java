@@ -13,18 +13,23 @@ import java.util.Set;
 import java.util.StringJoiner;
 
 /**
- * Prints real SWI-Prolog MQI results as readable REPL tables.
+ * Prints SWI-Prolog MQI results in a readable REPL format.
  *
- * Supports successful queries, queries without solutions,
- * Prolog errors and compound Prolog values.
+ * Sprint P2 supports two result representations:
  *
- * Column order follows the variable binding order received
- * from the MQI response parser.
+ * 1. Preformatted tables returned through the Rows binding.
+ * 2. Individual Prolog variable bindings displayed in columns.
+ *
+ * Preformatted Rows content preserves its original line
+ * breaks and spacing. Ordinary bindings are formatted as
+ * aligned tables.
+ *
+ * Query failures and Prolog errors are also supported.
  *
  * Project: Cyphail - Sprint P2
- * Course: EIF400 - Paradigmas de Programacion
- * University: Universidad Nacional de Costa Rica
- * School: Escuela de Informatica
+ * Course: EIF400 - Programming Paradigms
+ * University: National University of Costa Rica
+ * School: School of Informatics
  * Group Code: 04-10am
  *
  * Authors:
@@ -42,17 +47,19 @@ import java.util.StringJoiner;
  */
 public final class PrologTablePrinter {
 
+    private static final String ROWS_BINDING = "Rows";
+
     private final PrintStream output;
 
     /**
-     * Creates a printer using the standard console.
+     * Creates a printer using the standard console output.
      */
     public PrologTablePrinter() {
         this(System.out);
     }
 
     /**
-     * Creates a printer using an explicit output stream.
+     * Creates a printer with an explicit output stream.
      *
      * @param output destination for formatted results
      */
@@ -96,7 +103,10 @@ public final class PrologTablePrinter {
     /**
      * Prints successful query solutions.
      *
-     * @param rows variable bindings from Prolog
+     * Preformatted Rows bindings are handled separately
+     * from regular variable bindings.
+     *
+     * @param rows variable bindings returned by MQI
      */
     private void printSuccess(
             List<Map<String, Object>> rows
@@ -114,6 +124,74 @@ public final class PrologTablePrinter {
             return;
         }
 
+        /*
+         * The Sprint P2 engine may return a single binding
+         * named Rows containing an already formatted table.
+         *
+         * Its line breaks and whitespace must be preserved
+         * instead of being escaped as an ordinary table cell.
+         */
+        if (isPreformattedRowsResult(rows)) {
+            printPreformattedRows(rows);
+            return;
+        }
+
+        /*
+         * Other MQI responses contain individual bindings
+         * that must be displayed as an aligned table.
+         */
+        printBindingTable(rows);
+    }
+
+    /**
+     * Detects preformatted Rows results.
+     *
+     * Every solution must contain only the Rows binding,
+     * and its value must be a string.
+     *
+     * This prevents ordinary bindings from being treated
+     * as preformatted output.
+     *
+     * @param rows MQI solutions
+     * @return true if all solutions are Rows-only bindings
+     */
+    private boolean isPreformattedRowsResult(
+            List<Map<String, Object>> rows
+    ) {
+        return rows.stream().allMatch(row ->
+                row.size() == 1
+                        && row.get(ROWS_BINDING) instanceof String
+        );
+    }
+
+    /**
+     * Prints the original table text returned by Prolog.
+     *
+     * Newline characters, spaces and column names are
+     * preserved exactly as provided by the MQI result.
+     *
+     * @param rows solutions containing preformatted tables
+     */
+    private void printPreformattedRows(
+            List<Map<String, Object>> rows
+    ) {
+        for (Map<String, Object> row : rows) {
+            String table = (String) row.get(ROWS_BINDING);
+
+            output.println(table);
+        }
+
+        output.println();
+    }
+
+    /**
+     * Prints ordinary variable bindings as an aligned table.
+     *
+     * @param rows MQI solutions
+     */
+    private void printBindingTable(
+            List<Map<String, Object>> rows
+    ) {
         List<String> headers = collectHeaders(rows);
 
         if (headers.isEmpty()) {
@@ -130,7 +208,10 @@ public final class PrologTablePrinter {
                 formatRows(rows, headers);
 
         int[] widths =
-                calculateColumnWidths(headers, formattedRows);
+                calculateColumnWidths(
+                        headers,
+                        formattedRows
+                );
 
         printBorder(widths);
         printRow(headers, widths);
@@ -148,9 +229,6 @@ public final class PrologTablePrinter {
 
     /**
      * Collects variable names in their first-seen order.
-     *
-     * This also supports results whose rows contain
-     * different sets of variable bindings.
      *
      * @param rows result rows
      * @return ordered column names
@@ -285,7 +363,7 @@ public final class PrologTablePrinter {
      * Formats a value returned by the MQI response parser.
      *
      * Supports primitive values, lists and compound
-     * Prolog terms without depending on fake query data.
+     * Prolog terms without relying on fake query data.
      *
      * @param value decoded Prolog value
      * @return printable representation
@@ -326,11 +404,13 @@ public final class PrologTablePrinter {
     }
 
     /**
-     * Replaces control characters that would otherwise
-     * break the alignment of console table rows.
+     * Escapes control characters inside ordinary table
+     * cells to prevent broken column alignment.
+     *
+     * Preformatted Rows content does not use this method.
      *
      * @param text original value
-     * @return single-line printable value
+     * @return printable single-line value
      */
     private String sanitize(String text) {
         return text
