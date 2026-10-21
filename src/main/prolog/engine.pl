@@ -28,6 +28,10 @@
  * while loading the engine through MQI.
  */
 
+% Load the graph storage predicates used by the Cyphail engine.
+ 
+:- ensure_loaded('graph_store.pl').
+
 
 % ============================================
 % SAMPLE GRAPH DATABASE
@@ -44,10 +48,19 @@ cy_db('amigos').
 % GRAPH NODES
 % ============================================
 
+% Original nodes from the professor's sample graph.
+
 user_amigos_node(id1).
 user_amigos_node(id2).
 user_amigos_node(id3).
 user_amigos_node(id4).
+
+
+% Retrieves nodes created through the
+% Cyphail graph storage operations.
+
+user_amigos_node(NodeId) :-
+    cy_get_node(amigos, NodeId, _, _).
 
 
 % ============================================
@@ -78,6 +91,20 @@ user_amigos_label(e1, 'Amigo').
 user_amigos_label(e2, 'Amigo').
 user_amigos_label(e3, 'Amigo').
 user_amigos_label(e4, 'Amigo').
+
+% Retrieves labels from nodes created
+% through the Cyphail graph store.
+
+user_amigos_label(NodeId, Label) :-
+    cy_get_node(amigos, NodeId, Labels, _),
+    member(Label, Labels).
+
+
+% Retrieves relationship types from relationships
+% created through the Cyphail graph store.
+
+user_amigos_label(EdgeId, Type) :-
+    cy_get_edge(amigos, EdgeId, Type, _, _, _).
 
 
 % ============================================
@@ -175,18 +202,57 @@ main :-
 % GRAPH ACCESS PREDICATES
 % ============================================
 
-% Retrieves a relationship with its type,
-% source node, and destination node.
+% Retrieves a relationship from the original
+% sample graph provided by the professor.
 
 user_amigos_edge(EdgeId, Type, From, To) :-
     user_amigos_edge(EdgeId, From, To),
     user_amigos_label(EdgeId, Type).
 
 
-% Retrieves a property associated with a node.
+% Retrieves a relationship created through
+% the Cyphail graph storage operations.
+
+user_amigos_edge(EdgeId, Type, From, To) :-
+    cy_get_edge(
+        amigos,
+        EdgeId,
+        Type,
+        From,
+        To,
+        _
+    ).
+
+
+% Retrieves a node property from the original
+% sample graph provided by the professor.
 
 user_amigos_prop(NodeId, Property, Value) :-
     user_amigos_node_prop(NodeId, Property, Value).
+
+
+% Retrieves a node property from the
+% Cyphail graph storage.
+
+user_amigos_prop(NodeId, Property, Value) :-
+    cy_get_node_property(
+        amigos,
+        NodeId,
+        Property,
+        Value
+    ).
+
+
+% Retrieves a relationship property from the
+% Cyphail graph storage.
+
+user_amigos_prop(EdgeId, Property, Value) :-
+    cy_get_edge_property(
+        amigos,
+        EdgeId,
+        Property,
+        Value
+    ).
 
 
 % ============================================
