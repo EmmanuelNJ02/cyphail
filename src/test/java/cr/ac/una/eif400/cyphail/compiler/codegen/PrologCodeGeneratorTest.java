@@ -38,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * - WHERE comparisons and property references.
  * - WHERE execution order.
  * - Shared property lookup behavior.
+ * - Standalone CREATE node generation.
  * - Unsupported features and invalid references.
  *
  * Real SWI-Prolog and MQI execution is tested
@@ -820,25 +821,65 @@ class PrologCodeGeneratorTest {
     }
 
     // =====================================================
-    // UNSUPPORTED FEATURES AND VALIDATION
+    // CREATE CODE GENERATION
     // =====================================================
 
+    /**
+     * Verifies the new Sprint P2 functionality:
+     * CREATE without a preceding MATCH clause.
+     *
+     * CREATE is now implemented, so the test
+     * checks the generated Prolog goal instead
+     * of expecting an UnsupportedOperationException.
+     */
     @Test
-    void shouldRejectStandaloneCreateUntilSupported() {
+    void shouldGenerateStandaloneCreateNode() {
 
-        Query query = parser.parseOrThrow(
+        PrologGenerationResult result = generate(
                 """
                 CREATE (a:Persona {nombre: 'Marta'})
                 RETURN a
                 """
         );
 
-        assertThrows(
-                UnsupportedOperationException.class,
-                () -> generator.generate(query)
+        String goal = result.goal();
+
+        assertTrue(
+                goal.contains("cy_create_node("),
+                "Standalone CREATE must generate a node creation goal."
+        );
+
+        assertTrue(
+                goal.contains("'Persona'"),
+                "The created node label must be preserved."
+        );
+
+        assertTrue(
+                goal.contains("'nombre'-'Marta'"),
+                "The created node property must be preserved."
+        );
+
+        assertEquals(
+                List.of("a"),
+                result.columnHeaders(),
+                "RETURN must preserve the source variable."
+        );
+
+        assertEquals(
+                "__A",
+                result.variableMappings().get("a"),
+                "CREATE variables must have a Prolog mapping."
         );
     }
 
+    // =====================================================
+    // UNSUPPORTED FEATURES AND VALIDATION
+    // =====================================================
+
+    /**
+     * SET generation is still pending in the
+     * current Sprint P2 implementation.
+     */
     @Test
     void shouldRejectSetUntilSupported() {
 

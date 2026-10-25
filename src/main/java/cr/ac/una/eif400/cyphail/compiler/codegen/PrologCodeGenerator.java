@@ -23,36 +23,34 @@ import java.util.stream.Collectors;
  *
  * Authors:
  * Emmanuel Nunez Jimenez
- * Valery Alfaro Morales
- * Roy Arias Mejia
- * Keynell Molina Mora
  * Julissa Solano Valverde
+ * Valery Alfaro Morales
+ * Keynell Molina Mora
+ * Roy Arias Mejia
  *
- * Transpiles Cyphail query ASTs into executable
- * SWI-Prolog goals.
+ * Generates executable SWI-Prolog goals from Cyphail ASTs.
  *
- * Supported features:
- * - MATCH with isolated nodes and relationship paths.
- * - OUT, IN and NONE relationship directions.
- * - Chained and comma-separated patterns.
- * - Node and relationship property constraints.
- * - WHERE comparisons and supported AST expressions.
+ * Supported:
+ * - MATCH with nodes and relationship paths.
+ * - IN, OUT and NONE relationship directions.
+ * - Node and relationship properties.
+ * - WHERE comparisons and logical expressions.
  * - RETURN variables, properties and aliases.
- * - Node and relationship identifiers.
+ * - Standalone CREATE.
+ * - MATCH followed by CREATE.
+ * - CREATE nodes and relationships.
+ * - Multiple CREATE clauses.
+ * - CREATE statements without RETURN.
  *
- * Property bindings already guaranteed by MATCH or
- * WHERE are reused by RETURN to avoid duplicate
- * Prolog property lookups.
- *
- * Unsupported Sprint P2 features fail explicitly.
+ * SET, REMOVE and DELETE code generation will be
+ * integrated in subsequent Sprint P2 steps.
  */
 public final class PrologCodeGenerator {
 
     /**
-     * Compiles a query using a fresh AST visitor.
+     * Generates a complete executable Prolog goal.
      *
-     * @param query parsed Cyphail query
-     * @return generated goal and output metadata
+     * A fresh visitor is created for every query.
      */
     public PrologGenerationResult generate(Query query) {
 
@@ -65,7 +63,7 @@ public final class PrologCodeGenerator {
     }
 
     /**
-     * Stateful visitor for one query compilation.
+     * Stateful AST visitor for one query.
      */
     private static final class QueryVisitor
             implements AstVisitor<String> {
@@ -80,6 +78,9 @@ public final class PrologCodeGenerator {
         private final PrologWhereGoalBuilder whereBuilder =
                 new PrologWhereGoalBuilder();
 
+        private final PrologCreateGoalBuilder createBuilder =
+                new PrologCreateGoalBuilder();
+
         private final List<String> goals =
                 new ArrayList<>();
 
@@ -87,20 +88,24 @@ public final class PrologCodeGenerator {
                 columns =
                 new ArrayList<>();
 
+        /**
+         * Available source variables.
+         *
+         * Includes variables introduced by MATCH
+         * and subsequently created by CREATE.
+         */
         private final Set<String> matchedVariables =
                 new HashSet<>();
 
         /**
-         * Tracks properties guaranteed to be bound
-         * before processing the next RETURN item.
-         *
-         * Keys have the form "variable.property".
+         * Properties whose values have already been
+         * bound by earlier Prolog goals.
          */
         private final Set<String> boundProperties =
                 new HashSet<>();
 
         /**
-         * Generates one query and its output metadata.
+         * Compiles a query and its output metadata.
          */
         PrologGenerationResult compile(Query query) {
 
@@ -115,12 +120,18 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Compiles the query in source execution order:
+         * Compiles the query in source order:
          *
-         * MATCH -> WHERE -> RETURN.
+         * 1. MATCH, when present.
+         * 2. WHERE, when present.
+         * 3. Updating clauses, in source order.
+         * 4. RETURN, when present.
          *
-         * The generated Prolog goal registers, executes
-         * and removes its temporary query definition.
+         * A standalone CREATE does not require MATCH.
+         * Updating statements can execute without RETURN.
+         *
+         * The existing query registration and execution
+         * lifecycle is preserved.
          */
         @Override
         public String visitQuery(Query query) {
@@ -130,34 +141,96 @@ public final class PrologCodeGenerator {
                     "Query cannot be null"
             );
 
-            if (!query.hasMatch()) {
-                throw unsupported("Standalone CREATE");
+            if (!query.hasMatch()
+                    && query.updates().isEmpty()) {
+
+                throw unsupported(
+                        "Query without MATCH or CREATE"
+                );
             }
 
-            if (!query.updates().isEmpty()) {
-                throw unsupported("Updating clauses");
+            if (query.returnClause().isEmpty()
+                    && query.updates().isEmpty()) {
+
+                throw unsupported(
+                        "Queries without RETURN"
+                );
             }
 
-            if (query.returnClause().isEmpty()) {
-                throw unsupported("Queries without RETURN");
+            /*
+             * MATCH is optional in P2 for queries
+             * beginning with standalone CREATE.
+             */
+            if (query.hasMatch()) {
+
+                visitMatchClause(
+                        query.match()
+                );
             }
 
-            visitMatchClause(query.match());
-
+            /*
+             * WHERE is evaluated after MATCH and
+             * before updating clauses.
+             */
             query.where().ifPresent(
                     this::visitWhereClause
             );
 
-            visitReturnClause(
-                    query.returnClause().orElseThrow()
+            /*
+             * Execute all updating clauses in
+             * their original source order.
+             */
+            for (UpdatingClause update : query.updates()) {
+
+                if (update instanceof CreateClause create) {
+
+                    visitCreateClause(create);
+
+                } else if (update instanceof SetClause) {
+
+                    throw unsupported("SET");
+
+                } else if (update instanceof RemoveClause) {
+
+                    throw unsupported("REMOVE");
+
+                } else if (update instanceof DeleteClause delete) {
+
+                    visitDeleteClause(delete);
+
+                } else {
+
+                    throw unsupported(
+                            "Updating clause: "
+                                    + update.getClass()
+                                            .getSimpleName()
+                    );
+                }
+            }
+
+            /*
+             * RETURN is optional for CREATE and
+             * other updating statements.
+             */
+            query.returnClause().ifPresent(
+                    this::visitReturnClause
             );
+
+            if (goals.isEmpty()) {
+
+                throw new IllegalStateException(
+                        "No executable Prolog goals generated"
+                );
+            }
 
             String outputVariables = columns.stream()
                     .map(
                             PrologGenerationResult.OutputColumn
                                     ::prologVariable
                     )
-                    .collect(Collectors.joining(", "));
+                    .collect(
+                            Collectors.joining(", ")
+                    );
 
             String columnHeaders = columns.stream()
                     .map(
@@ -165,17 +238,42 @@ public final class PrologCodeGenerator {
                                     column.header()
                             )
                     )
-                    .collect(Collectors.joining(", "));
+                    .collect(
+                            Collectors.joining(", ")
+                    );
 
-            String body = String.join(", ", goals);
+            String body = String.join(
+                    ", ",
+                    goals
+            );
+
+            /*
+             * Prolog predicates without arguments are
+             * written as atoms rather than name().
+             *
+             * This allows CREATE without RETURN.
+             */
+            String queryHead = columns.isEmpty()
+                    ? "cyphail_query_p2"
+                    : "cyphail_query_p2("
+                            + outputVariables
+                            + ")";
 
             String clause =
-                    "(cyphail_query_p2("
-                            + outputVariables
-                            + ") :- ("
+                    "("
+                            + queryHead
+                            + " :- ("
                             + body
                             + "))";
 
+            /*
+             * The query lifecycle remains compatible
+             * with Roy's SWI-Prolog engine.
+             *
+             * cy_create_query registers the clause.
+             * cy_exec_query executes its body.
+             * cy_erase_query removes the clause.
+             */
             return "findall(Rows, ("
                     + "cy_create_query(__QueryRef, "
                     + clause
@@ -188,7 +286,7 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Visits the MATCH clause.
+         * Compiles MATCH patterns.
          */
         @Override
         public String visitMatchClause(MatchClause clause) {
@@ -198,14 +296,16 @@ public final class PrologCodeGenerator {
                     "MATCH clause cannot be null"
             );
 
-            return visitPattern(clause.pattern());
+            return visitPattern(
+                    clause.pattern()
+            );
         }
 
         /**
-         * Generates goals for every path in MATCH.
+         * Generates Prolog goals for every MATCH path.
          *
-         * Named relationship property bindings are
-         * registered after their pattern is generated.
+         * Supports isolated nodes, directed and
+         * undirected relationships and chained paths.
          */
         @Override
         public String visitPattern(Pattern pattern) {
@@ -238,7 +338,9 @@ public final class PrologCodeGenerator {
                                     symbols
                             );
 
-                    goals.addAll(generated.goals());
+                    goals.addAll(
+                            generated.goals()
+                    );
 
                     step.relationship()
                             .variable()
@@ -263,15 +365,18 @@ public final class PrologCodeGenerator {
                 }
             }
 
-            return String.join(", ", goals);
+            return String.join(
+                    ", ",
+                    goals
+            );
         }
 
         /**
-         * Generates node enumeration, labels and
-         * literal property constraints.
+         * Generates MATCH node enumeration,
+         * labels and property constraints.
          *
-         * Named property bindings are recorded for
-         * reuse by WHERE-related output projections.
+         * The original P2 MATCH semantics
+         * are preserved.
          */
         @Override
         public String visitNodePattern(NodePattern node) {
@@ -286,7 +391,9 @@ public final class PrologCodeGenerator {
 
                         matchedVariables.add(name);
 
-                        return symbols.resolveVariable(name);
+                        return symbols.resolveVariable(
+                                name
+                        );
                     })
                     .orElseGet(
                             symbols::newTemporaryVariable
@@ -324,7 +431,9 @@ public final class PrologCodeGenerator {
                         "user_amigos_prop("
                                 + nodeId
                                 + ", "
-                                + quoteAtom(property.name())
+                                + quoteAtom(
+                                        property.name()
+                                )
                                 + ", "
                                 + propertyValue
                                 + ")"
@@ -334,7 +443,9 @@ public final class PrologCodeGenerator {
                         "cy_eq("
                                 + propertyValue
                                 + ", "
-                                + literalTerm(property.value())
+                                + literalTerm(
+                                        property.value()
+                                )
                                 + ")"
                 );
 
@@ -352,13 +463,10 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Adds the WHERE goal after MATCH.
+         * Compiles WHERE conditions.
          *
-         * Records properties that are guaranteed to
-         * have been retrieved when WHERE succeeds.
-         *
-         * For OR, a property is considered guaranteed
-         * only when both branches retrieve it.
+         * The existing WHERE goal builder handles
+         * comparisons, AND and OR.
          */
         @Override
         public String visitWhereClause(WhereClause clause) {
@@ -376,6 +484,10 @@ public final class PrologCodeGenerator {
 
             goals.add(whereGoal);
 
+            /*
+             * Track properties that are guaranteed
+             * to be bound after the condition.
+             */
             boundProperties.addAll(
                     guaranteedWhereProperties(
                             clause.expression()
@@ -386,18 +498,18 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Determines which properties must be bound
-         * whenever a WHERE expression succeeds.
+         * Determines property bindings guaranteed
+         * after a successful WHERE expression.
          *
-         * AND: bindings from both conditions.
-         * OR: only bindings common to both branches.
-         * Comparison: bindings used by both operands.
+         * AND: union of both branches.
+         * OR: intersection of both branches.
          */
         private static Set<String> guaranteedWhereProperties(
                 Expression expression
         ) {
 
             if (!(expression instanceof BinaryExpression binary)) {
+
                 return Set.of();
             }
 
@@ -435,7 +547,8 @@ public final class PrologCodeGenerator {
                 return result;
             }
 
-            Set<String> result = new HashSet<>();
+            Set<String> result =
+                    new HashSet<>();
 
             collectPropertyReferences(
                     binary.left(),
@@ -451,8 +564,8 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Collects property references used inside
-         * a comparison or arithmetic expression.
+         * Collects property references within
+         * comparisons and arithmetic expressions.
          */
         private static void collectPropertyReferences(
                 Expression expression,
@@ -490,18 +603,57 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Creates a consistent property binding key.
+         * Creates a consistent property mapping key.
          */
         private static String propertyKey(
                 String variable,
                 String property
         ) {
 
-            return variable + "." + property;
+            return variable
+                    + "."
+                    + property;
         }
 
         /**
-         * Compiles RETURN and rejects unsupported modifiers.
+         * Compiles a complete CREATE clause.
+         *
+         * Uses the new helper responsible for
+         * graph creation operations.
+         *
+         * The helper shares the same symbols,
+         * available variables and property bindings
+         * already established by MATCH and WHERE.
+         */
+        @Override
+        public String visitCreateClause(CreateClause clause) {
+
+            Objects.requireNonNull(
+                    clause,
+                    "CREATE clause cannot be null"
+            );
+
+            List<String> createGoals =
+                    createBuilder.generate(
+                            clause,
+                            symbols,
+                            matchedVariables,
+                            boundProperties
+                    );
+
+            goals.addAll(
+                    createGoals
+            );
+
+            return String.join(
+                    ", ",
+                    createGoals
+            );
+        }
+
+        /**
+         * Compiles RETURN and preserves the
+         * existing P2 projection semantics.
          */
         @Override
         public String visitReturnClause(ReturnClause clause) {
@@ -512,14 +664,22 @@ public final class PrologCodeGenerator {
             );
 
             if (clause.distinct()) {
-                throw unsupported("RETURN DISTINCT");
+
+                throw unsupported(
+                        "RETURN DISTINCT"
+                );
             }
 
-            return visitProjection(clause.projection());
+            return visitProjection(
+                    clause.projection()
+            );
         }
 
         /**
-         * Compiles explicit RETURN items in order.
+         * Compiles explicit RETURN items.
+         *
+         * Projection modifiers unsupported by the
+         * current CodeGen fail explicitly.
          */
         @Override
         public String visitProjection(Projection projection) {
@@ -530,7 +690,10 @@ public final class PrologCodeGenerator {
             );
 
             if (projection.wildcard()) {
-                throw unsupported("RETURN *");
+
+                throw unsupported(
+                        "RETURN *"
+                );
             }
 
             ProjectionModifiers modifiers =
@@ -554,11 +717,16 @@ public final class PrologCodeGenerator {
                             PrologGenerationResult.OutputColumn
                                     ::prologVariable
                     )
-                    .collect(Collectors.joining(", "));
+                    .collect(
+                            Collectors.joining(", ")
+                    );
         }
 
         /**
-         * Generates a RETURN item and its column metadata.
+         * Compiles an individual RETURN item.
+         *
+         * A pattern variable returns its ID.
+         * A property expression returns its value.
          */
         @Override
         public String visitProjectionItem(ProjectionItem item) {
@@ -568,7 +736,8 @@ public final class PrologCodeGenerator {
                     "Projection item cannot be null"
             );
 
-            Expression expression = item.expression();
+            Expression expression =
+                    item.expression();
 
             String source;
             String prologVariable;
@@ -580,7 +749,9 @@ public final class PrologCodeGenerator {
                 ensureMatched(source);
 
                 prologVariable =
-                        visitVariableExpression(variable);
+                        visitVariableExpression(
+                                variable
+                        );
 
             } else if (
                     expression instanceof PropertyExpression property
@@ -593,10 +764,14 @@ public final class PrologCodeGenerator {
                         property.property()
                 );
 
-                ensureMatched(owner.name());
+                ensureMatched(
+                        owner.name()
+                );
 
                 prologVariable =
-                        visitPropertyExpression(property);
+                        visitPropertyExpression(
+                                property
+                        );
 
             } else {
 
@@ -608,7 +783,8 @@ public final class PrologCodeGenerator {
                 );
             }
 
-            String header = item.alias().orElse(source);
+            String header =
+                    item.alias().orElse(source);
 
             columns.add(
                     new PrologGenerationResult.OutputColumn(
@@ -622,11 +798,9 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Retrieves a property only if it has not
-         * already been guaranteed by an earlier goal.
-         *
-         * All occurrences use the same Prolog variable
-         * through the shared symbol table.
+         * Generates a property lookup only when
+         * that lookup has not already been guaranteed
+         * by an earlier MATCH or WHERE goal.
          */
         @Override
         public String visitPropertyExpression(
@@ -646,10 +820,14 @@ public final class PrologCodeGenerator {
                 );
             }
 
-            ensureMatched(owner.name());
+            ensureMatched(
+                    owner.name()
+            );
 
             String elementId =
-                    symbols.resolveVariable(owner.name());
+                    symbols.resolveVariable(
+                            owner.name()
+                    );
 
             String propertyValue =
                     symbols.resolveProperty(
@@ -662,14 +840,15 @@ public final class PrologCodeGenerator {
                     expression.property()
             );
 
-            // Avoid repeating a guaranteed property lookup.
             if (boundProperties.add(key)) {
 
                 goals.add(
                         "user_amigos_prop("
                                 + elementId
                                 + ", "
-                                + quoteAtom(expression.property())
+                                + quoteAtom(
+                                        expression.property()
+                                )
                                 + ", "
                                 + propertyValue
                                 + ")"
@@ -680,7 +859,8 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Resolves a named Cyphail variable to Prolog.
+         * Resolves a Cyphail variable to its
+         * corresponding Prolog variable.
          */
         @Override
         public String visitVariableExpression(
@@ -698,7 +878,11 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Checks that a RETURN variable belongs to MATCH.
+         * Validates that a source variable
+         * is available for projection.
+         *
+         * The available set includes both MATCH
+         * variables and CREATE variables.
          */
         private void ensureMatched(String variableName) {
 
@@ -712,31 +896,37 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Converts supported literals to Prolog terms.
+         * Converts a supported pattern literal
+         * to an executable Prolog term.
          */
-        private static String literalTerm(Expression expression) {
+        private static String literalTerm(
+                Expression expression
+        ) {
 
             Objects.requireNonNull(
                     expression,
                     "Literal expression cannot be null"
             );
 
-            if (expression
-                    instanceof StringLiteralExpression value) {
+            if (expression instanceof StringLiteralExpression value) {
 
-                return quoteAtom(value.value());
+                return quoteAtom(
+                        value.value()
+                );
             }
 
-            if (expression
-                    instanceof IntegerLiteralExpression value) {
+            if (expression instanceof IntegerLiteralExpression value) {
 
-                return Long.toString(value.value());
+                return Long.toString(
+                        value.value()
+                );
             }
 
-            if (expression
-                    instanceof FloatLiteralExpression value) {
+            if (expression instanceof FloatLiteralExpression value) {
 
-                return Double.toString(value.value());
+                return Double.toString(
+                        value.value()
+                );
             }
 
             throw unsupported(
@@ -748,9 +938,11 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Escapes a value as a SWI-Prolog atom.
+         * Escapes an atom used by SWI-Prolog.
          */
-        private static String quoteAtom(String value) {
+        private static String quoteAtom(
+                String value
+        ) {
 
             Objects.requireNonNull(
                     value,
@@ -764,7 +956,8 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Constructs consistent unsupported feature errors.
+         * Creates a descriptive exception
+         * for functionality still pending.
          */
         private static UnsupportedOperationException unsupported(
                 String feature
@@ -777,38 +970,34 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * CREATE CodeGen remains pending.
-         */
-        @Override
-        public String visitCreateClause(CreateClause clause) {
-
-            throw unsupported("CREATE");
-        }
-
-        /**
-         * DELETE CodeGen remains pending.
+         * DELETE will be implemented after CREATE.
          */
         @Override
         public String visitDeleteClause(DeleteClause clause) {
 
-            throw unsupported("DELETE");
+            throw unsupported(
+                    "DELETE"
+            );
         }
 
         /**
-         * Pattern properties are compiled by the
-         * node and relationship goal builders.
+         * Pattern properties are compiled within
+         * the corresponding node or relationship
+         * goal builder.
          */
         @Override
         public String visitPatternProperty(
                 PatternProperty property
         ) {
 
-            throw unsupported("PatternProperty visitor");
+            throw unsupported(
+                    "PatternProperty visitor"
+            );
         }
 
         /**
-         * Binary WHERE expressions are handled by
-         * PrologWhereGoalBuilder.
+         * WHERE binary expressions are compiled
+         * by PrologWhereGoalBuilder.
          */
         @Override
         public String visitBinaryExpression(
@@ -821,47 +1010,55 @@ public final class PrologCodeGenerator {
         }
 
         /**
-         * Generates an integer literal.
+         * Generates integer literal terms.
          */
         @Override
         public String visitIntegerLiteralExpression(
                 IntegerLiteralExpression expression
         ) {
 
-            return literalTerm(expression);
+            return literalTerm(
+                    expression
+            );
         }
 
         /**
-         * Generates a string literal.
+         * Generates string literal terms.
          */
         @Override
         public String visitStringLiteralExpression(
                 StringLiteralExpression expression
         ) {
 
-            return literalTerm(expression);
+            return literalTerm(
+                    expression
+            );
         }
 
         /**
-         * Generates a boolean literal.
+         * Generates boolean literal terms.
          */
         @Override
         public String visitBooleanLiteralExpression(
                 BooleanLiteralExpression expression
         ) {
 
-            return expression.value() ? "true" : "false";
+            return expression.value()
+                    ? "true"
+                    : "false";
         }
 
         /**
-         * NULL runtime semantics remain pending.
+         * NULL requires explicit runtime semantics.
          */
         @Override
         public String visitNullLiteralExpression(
                 NullLiteralExpression expression
         ) {
 
-            throw unsupported("NULL literals");
+            throw unsupported(
+                    "NULL literals"
+            );
         }
     }
 }
