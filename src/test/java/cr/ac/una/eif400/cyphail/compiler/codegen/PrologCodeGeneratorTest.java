@@ -39,7 +39,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * - WHERE execution order.
  * - Shared property lookup behavior.
  * - Standalone CREATE node generation.
- * - Unsupported features and invalid references.
+ * - SET property update generation.
+ * - Invalid variable references.
  *
  * Real SWI-Prolog and MQI execution is tested
  * separately using integration tests.
@@ -825,12 +826,11 @@ class PrologCodeGeneratorTest {
     // =====================================================
 
     /**
-     * Verifies the new Sprint P2 functionality:
+     * Verifies Sprint P2 CREATE functionality:
      * CREATE without a preceding MATCH clause.
      *
-     * CREATE is now implemented, so the test
-     * checks the generated Prolog goal instead
-     * of expecting an UnsupportedOperationException.
+     * CREATE is implemented, so this test
+     * checks the generated Prolog goal.
      */
     @Test
     void shouldGenerateStandaloneCreateNode() {
@@ -846,7 +846,8 @@ class PrologCodeGeneratorTest {
 
         assertTrue(
                 goal.contains("cy_create_node("),
-                "Standalone CREATE must generate a node creation goal."
+                "Standalone CREATE must generate "
+                        + "a node creation goal."
         );
 
         assertTrue(
@@ -873,15 +874,22 @@ class PrologCodeGeneratorTest {
     }
 
     // =====================================================
-    // UNSUPPORTED FEATURES AND VALIDATION
+    // SET CODE GENERATION
     // =====================================================
 
     /**
-     * SET generation is still pending in the
-     * current Sprint P2 implementation.
+     * Verifies that SET is now supported by
+     * the Sprint P2 Prolog code generator.
+     *
+     * A property assignment must generate
+     * the corresponding graph mutation goal
+     * without throwing an exception.
+     *
+     * This test replaces the previous test
+     * shouldRejectSetUntilSupported.
      */
     @Test
-    void shouldRejectSetUntilSupported() {
+    void shouldGenerateSetNowSupported() {
 
         Query query = parser.parseOrThrow(
                 """
@@ -891,11 +899,54 @@ class PrologCodeGeneratorTest {
                 """
         );
 
-        assertThrows(
-                UnsupportedOperationException.class,
-                () -> generator.generate(query)
+        PrologGenerationResult result =
+                assertDoesNotThrow(
+                        () -> generator.generate(query)
+                );
+
+        assertNotNull(result);
+
+        assertTrue(
+                result.goal().contains(
+                        "cy_set_node_property("
+                                + "amigos, __A, 'edad', 25)"
+                ),
+                "SET must generate the expected "
+                        + "Prolog node property update."
+        );
+
+        assertEquals(
+                List.of("a"),
+                result.columnHeaders()
+        );
+
+        assertEquals(
+                "__A",
+                result.variableMappings().get("a")
+        );
+
+        assertTrue(
+                result.goal().contains(
+                        "cy_create_query"
+                )
+        );
+
+        assertTrue(
+                result.goal().contains(
+                        "cy_exec_query"
+                )
+        );
+
+        assertTrue(
+                result.goal().contains(
+                        "cy_erase_query"
+                )
         );
     }
+
+    // =====================================================
+    // INVALID REFERENCES AND VALIDATION
+    // =====================================================
 
     @Test
     void shouldRejectUnmatchedReturnVariable() {

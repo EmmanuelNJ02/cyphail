@@ -1,3 +1,4 @@
+
 /*
  * Universidad Nacional de Costa Rica
  * School of Informatics
@@ -8,25 +9,41 @@
  * Group: 04-10am
  *
  * Team Members:
- * - Emmanuel Núñez Jiménez
+ * - Emmanuel Nunez Jimenez
  * - Julissa Solano Valverde
  * - Valery Alfaro Morales
- * - Keynell Molina Mora
  * - Roy Arias Mejia
+ * - Keynell Molina Mora
  *
  * File: graph_store.pl
  *
  * Description:
+ *
  * In-memory graph storage for the Cyphail
  * SWI-Prolog execution engine.
  *
- * This file provides operations for creating
- * and retrieving graph nodes, relationships,
- * and their properties.
+ * Provides:
  *
- * Graph data is stored in the SWI-Prolog
- * recorded database without declaring
- * dynamic predicates.
+ * - Node creation and retrieval.
+ * - Relationship creation and retrieval.
+ * - Node and relationship properties.
+ * - SET property updates.
+ * - REMOVE property operations.
+ * - DELETE node and relationship operations.
+ *
+ * Graph elements created by Cyphail are stored
+ * in the SWI-Prolog recorded database.
+ *
+ * Sprint P2:
+ *
+ * SET additionally supports original sample
+ * graph nodes defined in engine.pl.
+ *
+ * IMPORTANT:
+ *
+ * engine.pl must declare
+ * user_amigos_node_prop/3 as dynamic for
+ * sample graph property updates.
  */
 
 
@@ -34,8 +51,8 @@
 % PROPERTY VALIDATION
 % ============================================
 
-% Verifies that a property contains an
-% atom key and a fully instantiated value.
+% Verifies that a property contains
+% an atom key and an instantiated value.
 
 cy_valid_property(Key-Value) :-
     atom(Key),
@@ -49,8 +66,8 @@ cy_valid_property(Key-Value) :-
 % Creates a node with a generated identifier.
 %
 % Graph      - Graph name.
-% Labels     - List of node labels.
-% Properties - List of Key-Value pairs.
+% Labels     - Node labels.
+% Properties - Key-Value pairs.
 % NodeId     - Generated node identifier.
 
 cy_create_node(Graph, Labels, Properties, NodeId) :-
@@ -61,7 +78,11 @@ cy_create_node(Graph, Labels, Properties, NodeId) :-
     is_list(Properties),
     maplist(cy_valid_property, Properties),
 
-    flag(cyphail_node_counter, Number, Number + 1),
+    flag(
+        cyphail_node_counter,
+        Number,
+        Number + 1
+    ),
 
     format(
         atom(NodeId),
@@ -71,7 +92,12 @@ cy_create_node(Graph, Labels, Properties, NodeId) :-
 
     recordz(
         cyphail_graph_nodes,
-        node(Graph, NodeId, Labels, Properties),
+        node(
+            Graph,
+            NodeId,
+            Labels,
+            Properties
+        ),
         _
     ).
 
@@ -85,7 +111,12 @@ cy_create_node(Graph, Labels, Properties, NodeId) :-
 cy_get_node(Graph, NodeId, Labels, Properties) :-
     recorded(
         cyphail_graph_nodes,
-        node(Graph, NodeId, Labels, Properties),
+        node(
+            Graph,
+            NodeId,
+            Labels,
+            Properties
+        ),
         _
     ).
 
@@ -97,8 +128,17 @@ cy_get_node(Graph, NodeId, Labels, Properties) :-
 % Retrieves a property from a stored node.
 
 cy_get_node_property(Graph, NodeId, Key, Value) :-
-    cy_get_node(Graph, NodeId, _, Properties),
-    member(Key-Value, Properties).
+    cy_get_node(
+        Graph,
+        NodeId,
+        _,
+        Properties
+    ),
+
+    member(
+        Key-Value,
+        Properties
+    ).
 
 
 % ============================================
@@ -106,27 +146,53 @@ cy_get_node_property(Graph, NodeId, Key, Value) :-
 % ============================================
 
 % Creates a directed relationship between
-% two existing nodes in the same graph.
+% two existing stored nodes.
 %
 % Graph      - Graph name.
 % From       - Source node identifier.
 % To         - Destination node identifier.
 % Type       - Relationship type.
-% Properties - List of Key-Value pairs.
+% Properties - Relationship properties.
 % EdgeId     - Generated relationship identifier.
 
-cy_create_edge(Graph, From, To, Type, Properties, EdgeId) :-
+cy_create_edge(
+    Graph,
+    From,
+    To,
+    Type,
+    Properties,
+    EdgeId
+) :-
     atom(Graph),
     atom(Type),
     Type \= '',
 
-    cy_get_node(Graph, From, _, _),
-    cy_get_node(Graph, To, _, _),
+    cy_get_node(
+        Graph,
+        From,
+        _,
+        _
+    ),
+
+    cy_get_node(
+        Graph,
+        To,
+        _,
+        _
+    ),
 
     is_list(Properties),
-    maplist(cy_valid_property, Properties),
 
-    flag(cyphail_edge_counter, Number, Number + 1),
+    maplist(
+        cy_valid_property,
+        Properties
+    ),
+
+    flag(
+        cyphail_edge_counter,
+        Number,
+        Number + 1
+    ),
 
     format(
         atom(EdgeId),
@@ -136,7 +202,14 @@ cy_create_edge(Graph, From, To, Type, Properties, EdgeId) :-
 
     recordz(
         cyphail_graph_edges,
-        edge(Graph, EdgeId, Type, From, To, Properties),
+        edge(
+            Graph,
+            EdgeId,
+            Type,
+            From,
+            To,
+            Properties
+        ),
         _
     ).
 
@@ -145,13 +218,26 @@ cy_create_edge(Graph, From, To, Type, Properties, EdgeId) :-
 % RELATIONSHIP RETRIEVAL
 % ============================================
 
-% Retrieves a stored relationship, including
-% its direction, type, and properties.
+% Retrieves a stored relationship.
 
-cy_get_edge(Graph, EdgeId, Type, From, To, Properties) :-
+cy_get_edge(
+    Graph,
+    EdgeId,
+    Type,
+    From,
+    To,
+    Properties
+) :-
     recorded(
         cyphail_graph_edges,
-        edge(Graph, EdgeId, Type, From, To, Properties),
+        edge(
+            Graph,
+            EdgeId,
+            Type,
+            From,
+            To,
+            Properties
+        ),
         _
     ).
 
@@ -160,44 +246,76 @@ cy_get_edge(Graph, EdgeId, Type, From, To, Properties) :-
 % RELATIONSHIP PROPERTY RETRIEVAL
 % ============================================
 
-% Retrieves a property from a stored
-% graph relationship.
+% Retrieves a property from a relationship
+% stored in the recorded database.
 
 cy_get_edge_property(Graph, EdgeId, Key, Value) :-
-    cy_get_edge(Graph, EdgeId, _, _, _, Properties),
-    member(Key-Value, Properties).
+    cy_get_edge(
+        Graph,
+        EdgeId,
+        _,
+        _,
+        _,
+        Properties
+    ),
+
+    member(
+        Key-Value,
+        Properties
+    ).
 
 
 % ============================================
 % PROPERTY UPDATE
 % ============================================
 
-% Replaces an existing property or adds it
-% when the property does not exist.
+% Replaces an existing property or adds
+% a new property when the key does not exist.
+%
+% Original properties are not modified
+% directly; an updated list is produced.
 
-cy_update_property(Key, Value, Properties, UpdatedProperties) :-
+cy_update_property(
+    Key,
+    Value,
+    Properties,
+    UpdatedProperties
+) :-
     atom(Key),
     ground(Value),
+
     (
-        select(Key-_, Properties, RemainingProperties)
+        select(
+            Key-_,
+            Properties,
+            RemainingProperties
+        )
     ->
         true
     ;
         RemainingProperties = Properties
     ),
-    UpdatedProperties = [Key-Value | RemainingProperties].
+
+    UpdatedProperties = [
+        Key-Value
+        | RemainingProperties
+    ].
 
 
 % ============================================
-% NODE PROPERTY UPDATE
+% NODE PROPERTY UPDATE - STORED NODES
 % ============================================
 
-% Updates a property of an existing node.
+% Updates a node created through CREATE.
 %
-% Graph  - Graph name.
-% NodeId - Node identifier.
-% Key    - Property name.
-% Value  - New property value.
+% The node is located in the recorded
+% database, updated and stored again.
+%
+% The old record is removed after the
+% replacement has been created.
+%
+% This preserves the existing Sprint P2
+% CREATE and SET behavior.
 
 cy_set_node_property(Graph, NodeId, Key, Value) :-
     atom(Key),
@@ -205,7 +323,12 @@ cy_set_node_property(Graph, NodeId, Key, Value) :-
 
     recorded(
         cyphail_graph_nodes,
-        node(Graph, NodeId, Labels, Properties),
+        node(
+            Graph,
+            NodeId,
+            Labels,
+            Properties
+        ),
         Reference
     ),
 
@@ -218,7 +341,12 @@ cy_set_node_property(Graph, NodeId, Key, Value) :-
 
     recordz(
         cyphail_graph_nodes,
-        node(Graph, NodeId, Labels, UpdatedProperties),
+        node(
+            Graph,
+            NodeId,
+            Labels,
+            UpdatedProperties
+        ),
         _
     ),
 
@@ -226,10 +354,94 @@ cy_set_node_property(Graph, NodeId, Key, Value) :-
 
 
 % ============================================
+% NODE PROPERTY UPDATE - ORIGINAL GRAPH
+% ============================================
+
+% Sprint P2 SET support for original nodes.
+%
+% The sample graph in engine.pl defines
+% nodes such as:
+%
+% user_amigos_node(id1).
+%
+% and properties such as:
+%
+% user_amigos_node_prop(id1, age, 30).
+%
+% These original nodes are not contained
+% in cyphail_graph_nodes.
+%
+% Therefore, SET requires an additional
+% implementation for these nodes.
+%
+% Example:
+%
+% MATCH (a:Person {name: 'Juan Perez'})
+% SET a.age = 31
+% RETURN a.age
+%
+% The previous age fact is removed and
+% replaced by the updated property fact.
+%
+% The operation is persistent throughout
+% the current SWI-Prolog process.
+%
+% This clause only applies to original
+% sample nodes, not CREATE nodes.
+%
+% IMPORTANT:
+%
+% user_amigos_node_prop/3 must be declared
+% dynamic in engine.pl before use.
+
+cy_set_node_property(amigos, NodeId, Key, Value) :-
+    atom(NodeId),
+    atom(Key),
+    ground(Value),
+
+    % The node must not be a CREATE node.
+
+    \+ cy_get_node(
+        amigos,
+        NodeId,
+        _,
+        _
+    ),
+
+    % Verify that the original node exists.
+
+    user_amigos_node(NodeId),
+
+    % Remove all previous facts for this key.
+    %
+    % retractall is necessary because some
+    % sample nodes have repeated property facts.
+
+    retractall(
+        user_amigos_node_prop(
+            NodeId,
+            Key,
+            _
+        )
+    ),
+
+    % Persist the new property value.
+
+    assertz(
+        user_amigos_node_prop(
+            NodeId,
+            Key,
+            Value
+        )
+    ).
+
+
+% ============================================
 % RELATIONSHIP PROPERTY UPDATE
 % ============================================
 
-% Updates a property of an existing relationship.
+% Updates an existing relationship stored
+% in the Cyphail recorded database.
 %
 % Graph  - Graph name.
 % EdgeId - Relationship identifier.
@@ -242,7 +454,14 @@ cy_set_edge_property(Graph, EdgeId, Key, Value) :-
 
     recorded(
         cyphail_graph_edges,
-        edge(Graph, EdgeId, Type, From, To, Properties),
+        edge(
+            Graph,
+            EdgeId,
+            Type,
+            From,
+            To,
+            Properties
+        ),
         Reference
     ),
 
@@ -273,23 +492,31 @@ cy_set_edge_property(Graph, EdgeId, Key, Value) :-
 % PROPERTY REMOVAL
 % ============================================
 
-% Removes all occurrences of a property
-% identified by its key.
-%
-% Key               - Property name.
-% Properties        - Original property list.
-% UpdatedProperties - Property list without the key.
+% Removes all property pairs having
+% the requested key.
 %
 % Removing a nonexistent property leaves
-% the original property list unchanged.
+% the remaining properties unchanged.
 
-cy_remove_property(Key, Properties, UpdatedProperties) :-
+cy_remove_property(
+    Key,
+    Properties,
+    UpdatedProperties
+) :-
     atom(Key),
+
     findall(
         ExistingKey-ExistingValue,
         (
-            member(ExistingKey-ExistingValue, Properties),
-            dif(ExistingKey, Key)
+            member(
+                ExistingKey-ExistingValue,
+                Properties
+            ),
+
+            dif(
+                ExistingKey,
+                Key
+            )
         ),
         UpdatedProperties
     ).
@@ -299,11 +526,12 @@ cy_remove_property(Key, Properties, UpdatedProperties) :-
 % NODE PROPERTY REMOVAL
 % ============================================
 
-% Removes a property from an existing node.
+% Removes a property from a node stored
+% in the recorded database.
 %
 % Graph  - Graph name.
 % NodeId - Node identifier.
-% Key    - Property name to remove.
+% Key    - Property to remove.
 
 cy_remove_node_property(Graph, NodeId, Key) :-
     atom(Graph),
@@ -312,7 +540,12 @@ cy_remove_node_property(Graph, NodeId, Key) :-
 
     recorded(
         cyphail_graph_nodes,
-        node(Graph, NodeId, Labels, Properties),
+        node(
+            Graph,
+            NodeId,
+            Labels,
+            Properties
+        ),
         Reference
     ),
 
@@ -324,7 +557,12 @@ cy_remove_node_property(Graph, NodeId, Key) :-
 
     recordz(
         cyphail_graph_nodes,
-        node(Graph, NodeId, Labels, UpdatedProperties),
+        node(
+            Graph,
+            NodeId,
+            Labels,
+            UpdatedProperties
+        ),
         _
     ),
 
@@ -335,12 +573,8 @@ cy_remove_node_property(Graph, NodeId, Key) :-
 % RELATIONSHIP PROPERTY REMOVAL
 % ============================================
 
-% Removes a property from an existing
-% graph relationship.
-%
-% Graph  - Graph name.
-% EdgeId - Relationship identifier.
-% Key    - Property name to remove.
+% Removes a property from a relationship
+% stored in the recorded database.
 
 cy_remove_edge_property(Graph, EdgeId, Key) :-
     atom(Graph),
@@ -349,7 +583,14 @@ cy_remove_edge_property(Graph, EdgeId, Key) :-
 
     recorded(
         cyphail_graph_edges,
-        edge(Graph, EdgeId, Type, From, To, Properties),
+        edge(
+            Graph,
+            EdgeId,
+            Type,
+            From,
+            To,
+            Properties
+        ),
         Reference
     ),
 
@@ -379,12 +620,11 @@ cy_remove_edge_property(Graph, EdgeId, Key) :-
 % RELATIONSHIP DELETION
 % ============================================
 
-% Deletes an existing relationship from the graph.
+% Deletes an existing stored relationship.
 %
-% Graph  - Graph name.
-% EdgeId - Relationship identifier.
+% The source and destination nodes remain
+% unchanged.
 %
-% The source and destination nodes are preserved.
 % The operation fails when the relationship
 % does not exist in the specified graph.
 
@@ -394,26 +634,34 @@ cy_delete_edge(Graph, EdgeId) :-
 
     recorded(
         cyphail_graph_edges,
-        edge(Graph, EdgeId, _, _, _, _),
+        edge(
+            Graph,
+            EdgeId,
+            _,
+            _,
+            _,
+            _
+        ),
         Reference
     ),
 
     erase(Reference).
 
+
 % ============================================
 % NODE DELETION
 % ============================================
 
-% Deletes an existing node from the graph.
+% Deletes an existing stored node.
+%
+% A node can only be deleted when it
+% has no attached stored relationships.
 %
 % Graph  - Graph name.
 % NodeId - Node identifier.
 %
-% A node can only be deleted when it has
-% no incoming or outgoing relationships.
-%
-% The operation fails if the node does not
-% exist or still has connected relationships.
+% The operation fails if the node does
+% not exist or has connected relationships.
 
 cy_delete_node(Graph, NodeId) :-
     atom(Graph),
@@ -421,19 +669,42 @@ cy_delete_node(Graph, NodeId) :-
 
     recorded(
         cyphail_graph_nodes,
-        node(Graph, NodeId, _, _),
+        node(
+            Graph,
+            NodeId,
+            _,
+            _
+        ),
         Reference
     ),
 
-    \+ recorded(
-        cyphail_graph_edges,
-        edge(Graph, _, _, NodeId, _, _),
-        _
-    ),
+    % Check outgoing relationships.
 
     \+ recorded(
         cyphail_graph_edges,
-        edge(Graph, _, _, _, NodeId, _),
+        edge(
+            Graph,
+            _,
+            _,
+            NodeId,
+            _,
+            _
+        ),
+        _
+    ),
+
+    % Check incoming relationships.
+
+    \+ recorded(
+        cyphail_graph_edges,
+        edge(
+            Graph,
+            _,
+            _,
+            _,
+            NodeId,
+            _
+        ),
         _
     ),
 
