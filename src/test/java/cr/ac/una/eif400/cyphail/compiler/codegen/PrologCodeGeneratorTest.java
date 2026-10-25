@@ -25,29 +25,23 @@ import static org.junit.jupiter.api.Assertions.*;
  * Keynell Molina Mora
  * Julissa Solano Valverde
  *
- * Unit tests for the Prolog code generator.
+ * Unit and regression tests for PrologCodeGenerator.
  *
- * Tests parse real Cyphail source statements and verify
- * that the AST visitor generates the expected Prolog goals,
- * variable mappings, column headers and RETURN projections.
- *
- * Coverage includes:
+ * Verifies:
  * - MATCH with isolated nodes.
  * - Node labels and properties.
- * - Outgoing relationships.
- * - Incoming relationships.
- * - Undirected relationships.
- * - Anonymous relationships.
- * - Chained relationships.
- * - Comma-separated pattern paths.
- * - Relationship property constraints.
- * - Relationship property projections.
- * - Node and relationship identifier projections.
- * - RETURN aliases.
- * - Unsupported P2 features.
+ * - Relationship directions OUT, IN and NONE.
+ * - Anonymous and chained relationships.
+ * - Comma-separated relationship paths.
+ * - Relationship properties and identifiers.
+ * - RETURN projections and aliases.
+ * - WHERE comparisons and property references.
+ * - WHERE execution order.
+ * - Shared property lookup behavior.
+ * - Unsupported features and invalid references.
  *
- * Integration with the running Prolog engine and MQI
- * is tested separately.
+ * Real SWI-Prolog and MQI execution is tested
+ * separately using integration tests.
  */
 class PrologCodeGeneratorTest {
 
@@ -58,23 +52,40 @@ class PrologCodeGeneratorTest {
             new PrologCodeGenerator();
 
     /**
-     * Parses a Cyphail statement and generates
-     * its corresponding Prolog result.
+     * Parses and compiles a Cyphail query.
      */
     private PrologGenerationResult generate(
             String source
     ) {
 
-        Query query =
-                parser.parseOrThrow(source);
+        Query query = parser.parseOrThrow(source);
 
         return generator.generate(query);
     }
 
     /**
-     * Verifies that a node MATCH statement produces
-     * the expected node, label and property goals.
+     * Counts exact substring occurrences.
      */
+    private static int occurrences(
+            String text,
+            String fragment
+    ) {
+
+        int count = 0;
+        int index = 0;
+
+        while ((index = text.indexOf(fragment, index)) >= 0) {
+            count++;
+            index += fragment.length();
+        }
+
+        return count;
+    }
+
+    // =====================================================
+    // MATCH AND NODE PROPERTIES
+    // =====================================================
+
     @Test
     void shouldGeneratePrologForNodeAndProperty() {
 
@@ -82,41 +93,27 @@ class PrologCodeGeneratorTest {
                 "MATCH (a:Persona) RETURN a.nombre"
         );
 
+        String goal = result.goal();
+
         assertTrue(
-                result.goal().contains(
-                        "user_amigos_node(__A)"
-                )
+                goal.contains("user_amigos_node(__A)")
         );
 
         assertTrue(
-                result.goal().contains(
+                goal.contains(
                         "user_amigos_label(__A, 'Persona')"
                 )
         );
 
         assertTrue(
-                result.goal().contains(
+                goal.contains(
                         "user_amigos_prop(__A, 'nombre', __A_NOMBRE)"
                 )
         );
 
-        assertTrue(
-                result.goal().contains(
-                        "cy_create_query"
-                )
-        );
-
-        assertTrue(
-                result.goal().contains(
-                        "cy_exec_query"
-                )
-        );
-
-        assertTrue(
-                result.goal().contains(
-                        "cy_erase_query"
-                )
-        );
+        assertTrue(goal.contains("cy_create_query"));
+        assertTrue(goal.contains("cy_exec_query"));
+        assertTrue(goal.contains("cy_erase_query"));
 
         assertEquals(
                 List.of("a.nombre"),
@@ -129,10 +126,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * Verifies that RETURN can project
-     * a matched node identifier.
-     */
     @Test
     void shouldReturnNodeIdentifierForPatternVariable() {
 
@@ -158,15 +151,9 @@ class PrologCodeGeneratorTest {
                 )
         );
 
-        assertTrue(
-                result.hasOutputColumns()
-        );
+        assertTrue(result.hasOutputColumns());
     }
 
-    /**
-     * Verifies that RETURN preserves
-     * projection order and aliases.
-     */
     @Test
     void shouldPreserveProjectionOrderAndAliases() {
 
@@ -204,10 +191,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * Verifies the generation of equality
-     * constraints for node properties.
-     */
     @Test
     void shouldGenerateLiteralPropertyConstraint() {
 
@@ -226,15 +209,10 @@ class PrologCodeGeneratorTest {
 
         assertEquals(
                 "__A_NOMBRE",
-                result.propertyMappings()
-                        .get("a.nombre")
+                result.propertyMappings().get("a.nombre")
         );
     }
 
-    /**
-     * Verifies that multiple node labels
-     * produce separate Prolog goals.
-     */
     @Test
     void shouldGenerateAllNodeLabels() {
 
@@ -258,10 +236,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * Verifies that each compilation maintains
-     * its own independent variable mappings.
-     */
     @Test
     void shouldKeepQueryVariableMappingsIndependent() {
 
@@ -284,17 +258,14 @@ class PrologCodeGeneratorTest {
         );
 
         assertFalse(
-                second.variableMappings()
-                        .containsKey("a")
+                second.variableMappings().containsKey("a")
         );
     }
 
-    /**
-     * Verifies outgoing relationship generation.
-     *
-     * OUT means that the relationship goes
-     * from the left node to the right node.
-     */
+    // =====================================================
+    // RELATIONSHIP PATTERNS
+    // =====================================================
+
     @Test
     void shouldGenerateOutgoingRelationship() {
 
@@ -318,8 +289,7 @@ class PrologCodeGeneratorTest {
 
         assertEquals(
                 "__R",
-                result.variableMappings()
-                        .get("r")
+                result.variableMappings().get("r")
         );
 
         assertTrue(
@@ -329,12 +299,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * Verifies incoming relationship generation.
-     *
-     * IN means that the relationship goes
-     * from the right node to the left node.
-     */
     @Test
     void shouldGenerateIncomingRelationship() {
 
@@ -364,10 +328,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * Verifies that an undirected relationship
-     * generates both endpoint orientations.
-     */
     @Test
     void shouldGenerateUndirectedRelationship() {
 
@@ -378,29 +338,25 @@ class PrologCodeGeneratorTest {
                 """
         );
 
+        String goal = result.goal();
+
         assertTrue(
-                result.goal().contains(
+                goal.contains(
                         "user_amigos_edge(__R, 'CONOCE', __A, __B)"
                 )
         );
 
         assertTrue(
-                result.goal().contains(
+                goal.contains(
                         "user_amigos_edge(__R, 'CONOCE', __B, __A)"
                 )
         );
 
         assertTrue(
-                result.goal().contains(
-                        "dif(__A, __B)"
-                )
+                goal.contains("dif(__A, __B)")
         );
     }
 
-    /**
-     * Verifies that anonymous relationships
-     * receive temporary Prolog variables.
-     */
     @Test
     void shouldGenerateAnonymousRelationship() {
 
@@ -423,15 +379,10 @@ class PrologCodeGeneratorTest {
         );
 
         assertFalse(
-                result.variableMappings()
-                        .containsKey("r")
+                result.variableMappings().containsKey("r")
         );
     }
 
-    /**
-     * Verifies that consecutive relationships
-     * are generated in their original order.
-     */
     @Test
     void shouldGenerateChainedRelationships() {
 
@@ -445,24 +396,18 @@ class PrologCodeGeneratorTest {
 
         String goal = result.goal();
 
-        assertTrue(
-                goal.contains(
-                        "user_amigos_edge(__R, 'CONOCE', __A, __B)"
-                )
-        );
+        String firstEdge =
+                "user_amigos_edge(__R, 'CONOCE', __A, __B)";
+
+        String secondEdge =
+                "user_amigos_edge(__S, 'TRABAJA_EN', __B, __C)";
+
+        assertTrue(goal.contains(firstEdge));
+        assertTrue(goal.contains(secondEdge));
 
         assertTrue(
-                goal.contains(
-                        "user_amigos_edge(__S, 'TRABAJA_EN', __B, __C)"
-                )
-        );
-
-        assertTrue(
-                goal.indexOf(
-                        "user_amigos_edge(__R, 'CONOCE', __A, __B)"
-                ) < goal.indexOf(
-                        "user_amigos_edge(__S, 'TRABAJA_EN', __B, __C)"
-                )
+                goal.indexOf(firstEdge)
+                        < goal.indexOf(secondEdge)
         );
 
         assertEquals(
@@ -471,10 +416,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * Verifies relationships distributed across
-     * comma-separated MATCH paths.
-     */
     @Test
     void shouldGenerateCommaSeparatedRelationshipPaths() {
 
@@ -509,10 +450,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * Verifies literal property constraints
-     * declared inside relationship patterns.
-     */
     @Test
     void shouldGenerateRelationshipPropertyConstraint() {
 
@@ -523,35 +460,32 @@ class PrologCodeGeneratorTest {
                 """
         );
 
+        String goal = result.goal();
+
         assertTrue(
-                result.goal().contains(
+                goal.contains(
                         "user_amigos_edge(__R, 'CONOCE', __A, __B)"
                 )
         );
 
         assertTrue(
-                result.goal().contains(
+                goal.contains(
                         "user_amigos_prop(__R, 'since', __R_SINCE)"
                 )
         );
 
         assertTrue(
-                result.goal().contains(
+                goal.contains(
                         "cy_eq(__R_SINCE, 2020)"
                 )
         );
 
         assertEquals(
                 "__R_SINCE",
-                result.propertyMappings()
-                        .get("r.since")
+                result.propertyMappings().get("r.since")
         );
     }
 
-    /**
-     * Verifies that RETURN can project a
-     * relationship property with an alias.
-     */
     @Test
     void shouldReturnRelationshipPropertyWithAlias() {
 
@@ -588,10 +522,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * Verifies mixed node and relationship
-     * projections within the same RETURN.
-     */
     @Test
     void shouldReturnNodeAndRelationshipValuesTogether() {
 
@@ -605,11 +535,7 @@ class PrologCodeGeneratorTest {
         );
 
         assertEquals(
-                List.of(
-                        "origen",
-                        "relacion",
-                        "destino"
-                ),
+                List.of("origen", "relacion", "destino"),
                 result.columnHeaders()
         );
 
@@ -632,31 +558,271 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * WHERE generation remains unsupported
-     * until the next CodeGen implementation.
-     */
-    @Test
-    void shouldRejectWhereUntilSupported() {
+    // =====================================================
+    // WHERE CODE GENERATION
+    // =====================================================
 
-        Query query = parser.parseOrThrow(
+    @Test
+    void shouldGenerateWhereGreaterThanForNodeProperty() {
+
+        PrologGenerationResult result = generate(
                 """
-                MATCH (a:Persona)
-                WHERE a.edad > 18
-                RETURN a.nombre
+                MATCH (a:Person)
+                WHERE a.age > 18
+                RETURN a.name
                 """
         );
 
-        assertThrows(
-                UnsupportedOperationException.class,
-                () -> generator.generate(query)
+        String goal = result.goal();
+
+        assertTrue(
+                goal.contains(
+                        "user_amigos_prop(__A, 'age', __A_AGE)"
+                )
+        );
+
+        assertTrue(
+                goal.contains("number(__A_AGE)")
+        );
+
+        assertTrue(
+                goal.contains("(__A_AGE > 18)")
+        );
+
+        assertEquals(
+                List.of("a.name"),
+                result.columnHeaders()
+        );
+
+        assertEquals(
+                "__A_AGE",
+                result.propertyMappings().get("a.age")
+        );
+    }
+
+    @Test
+    void shouldGenerateWhereEqualityWithString() {
+
+        PrologGenerationResult result = generate(
+                """
+                MATCH (a:Person)
+                WHERE a.name = 'Juan Perez'
+                RETURN a
+                """
+        );
+
+        assertTrue(
+                result.goal().contains(
+                        "cy_eq(__A_NAME, 'Juan Perez')"
+                )
+        );
+
+        assertEquals(
+                List.of("a"),
+                result.columnHeaders()
+        );
+    }
+
+    @Test
+    void shouldGenerateWhereInequalityBetweenProperties() {
+
+        PrologGenerationResult result = generate(
+                """
+                MATCH (a:Person), (b:Person)
+                WHERE a.name <> b.name
+                RETURN a.name, b.name
+                """
+        );
+
+        String goal = result.goal();
+
+        assertTrue(
+                goal.contains(
+                        "user_amigos_prop(__A, 'name', __A_NAME)"
+                )
+        );
+
+        assertTrue(
+                goal.contains(
+                        "user_amigos_prop(__B, 'name', __B_NAME)"
+                )
+        );
+
+        assertTrue(
+                goal.contains(
+                        "cy_neq(__A_NAME, __B_NAME)"
+                )
+        );
+    }
+
+    @Test
+    void shouldGenerateWhereForRelationshipProperty() {
+
+        PrologGenerationResult result = generate(
+                """
+                MATCH (a:Person)-[r:KNOWS]->(b:Person)
+                WHERE r.since < 2000
+                RETURN r
+                """
+        );
+
+        String goal = result.goal();
+
+        assertTrue(
+                goal.contains(
+                        "user_amigos_edge(__R, 'KNOWS', __A, __B)"
+                )
+        );
+
+        assertTrue(
+                goal.contains(
+                        "user_amigos_prop(__R, 'since', __R_SINCE)"
+                )
+        );
+
+        assertTrue(
+                goal.contains(
+                        "(__R_SINCE < 2000)"
+                )
+        );
+
+        assertEquals(
+                "__R_SINCE",
+                result.propertyMappings().get("r.since")
+        );
+    }
+
+    @Test
+    void shouldGenerateWhereWithDecimalComparison() {
+
+        PrologGenerationResult result = generate(
+                """
+                MATCH (p:Product)
+                WHERE p.price >= 19.99
+                RETURN p
+                """
+        );
+
+        String goal = result.goal();
+
+        assertTrue(
+                goal.contains(
+                        "user_amigos_prop(__P, 'price', __P_PRICE)"
+                )
+        );
+
+        assertTrue(
+                goal.contains(
+                        "(__P_PRICE >= 19.99)"
+                )
+        );
+
+        assertEquals(
+                List.of("p"),
+                result.columnHeaders()
+        );
+    }
+
+    @Test
+    void shouldPlaceWhereAfterMatchAndBeforeReturn() {
+
+        PrologGenerationResult result = generate(
+                """
+                MATCH (a:Person)
+                WHERE a.age > 18
+                RETURN a.name
+                """
+        );
+
+        String goal = result.goal();
+
+        int matchPosition = goal.indexOf(
+                "user_amigos_node(__A)"
+        );
+
+        int wherePosition = goal.indexOf(
+                "(__A_AGE > 18)"
+        );
+
+        int returnPosition = goal.indexOf(
+                "user_amigos_prop(__A, 'name', __A_NAME)"
+        );
+
+        assertTrue(matchPosition >= 0);
+        assertTrue(wherePosition >= 0);
+        assertTrue(returnPosition >= 0);
+
+        assertTrue(
+                matchPosition < wherePosition,
+                "MATCH must precede WHERE."
+        );
+
+        assertTrue(
+                wherePosition < returnPosition,
+                "WHERE must precede RETURN property retrieval."
+        );
+    }
+
+    @Test
+    void shouldRejectUnmatchedWhereVariable() {
+
+        Query query = parser.parseOrThrow(
+                """
+                MATCH (a:Person)
+                WHERE missing.age > 18
+                RETURN a
+                """
+        );
+
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> generator.generate(query)
+                );
+
+        assertTrue(
+                exception.getMessage().contains(
+                        "unmatched variable"
+                )
         );
     }
 
     /**
-     * Standalone CREATE generation is not yet
-     * implemented by the current generator.
+     * Regression test:
+     *
+     * A property referenced in both WHERE and RETURN
+     * should be retrieved once per matched binding.
+     *
+     * Repeating an identical property goal can multiply
+     * query solutions when the graph contains duplicate
+     * property facts.
      */
+    @Test
+    void shouldAvoidDuplicatePropertyLookupBetweenWhereAndReturn() {
+
+        PrologGenerationResult result = generate(
+                """
+                MATCH (a:Person)
+                WHERE a.age > 18
+                RETURN a.age
+                """
+        );
+
+        String lookup =
+                "user_amigos_prop(__A, 'age', __A_AGE)";
+
+        assertEquals(
+                1,
+                occurrences(result.goal(), lookup),
+                "The same property lookup should not be "
+                        + "generated twice."
+        );
+    }
+
+    // =====================================================
+    // UNSUPPORTED FEATURES AND VALIDATION
+    // =====================================================
+
     @Test
     void shouldRejectStandaloneCreateUntilSupported() {
 
@@ -673,10 +839,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * SET generation remains unsupported
-     * until mutation support is implemented.
-     */
     @Test
     void shouldRejectSetUntilSupported() {
 
@@ -694,10 +856,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * A RETURN variable must be introduced
-     * by the MATCH pattern.
-     */
     @Test
     void shouldRejectUnmatchedReturnVariable() {
 
@@ -718,10 +876,6 @@ class PrologCodeGeneratorTest {
         );
     }
 
-    /**
-     * Generating a null query must fail
-     * with a clear validation error.
-     */
     @Test
     void shouldRejectNullQuery() {
 
