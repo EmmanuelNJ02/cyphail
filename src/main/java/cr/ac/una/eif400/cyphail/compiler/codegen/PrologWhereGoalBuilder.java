@@ -25,30 +25,30 @@ import java.util.Set;
  *
  * Generates executable SWI-Prolog goals for WHERE clauses.
  *
- * Supports:
+ * Supported features:
  * - Equality and inequality comparisons.
  * - Numeric ordering comparisons.
  * - Node and relationship property references.
  * - Variable-to-variable comparisons.
  * - Integer, decimal, string and boolean literals.
- * - Logical AND and OR in the AST.
- * - Arithmetic expressions in the AST.
+ * - Logical AND and OR.
+ * - Arithmetic expressions represented in the AST.
  *
- * Logical and arithmetic expression parsing may require
- * additional parser support before those expressions can
- * be written directly in Cyphail source statements.
+ * Logical OR is treated as a boolean filter using once/1.
+ * This prevents a matching row from being duplicated
+ * solely because both OR branches succeed.
  *
  * Unsupported expressions fail explicitly.
  */
 public final class PrologWhereGoalBuilder {
 
     /**
-     * Generates the Prolog goal for a complete WHERE clause.
+     * Generates a Prolog goal for a complete WHERE clause.
      *
      * @param clause WHERE clause to compile
-     * @param symbols mapping table shared with the query
+     * @param symbols shared query variable table
      * @param matchedVariables variables introduced by MATCH
-     * @return executable Prolog goal
+     * @return generated Prolog goal
      */
     public String generate(
             WhereClause clause,
@@ -79,8 +79,8 @@ public final class PrologWhereGoalBuilder {
     }
 
     /**
-     * Compiles an expression intended to produce
-     * a true or false condition.
+     * Compiles an expression that represents a
+     * boolean condition.
      */
     private String compileCondition(
             Expression expression,
@@ -98,6 +98,7 @@ public final class PrologWhereGoalBuilder {
         }
 
         if (!(expression instanceof BinaryExpression binary)) {
+
             throw unsupported(
                     "WHERE condition: "
                             + expression.getClass().getSimpleName()
@@ -140,11 +141,18 @@ public final class PrologWhereGoalBuilder {
     }
 
     /**
-     * Generates conjunction or disjunction goals.
+     * Generates logical AND and OR conditions.
      *
-     * Parentheses preserve the original AST grouping.
-     * Property accesses remain inside their branches
-     * to preserve OR semantics.
+     * AND:
+     * Both conditions must succeed. The original
+     * conjunction semantics are preserved.
+     *
+     * OR:
+     * once/1 evaluates the disjunction as a boolean
+     * filter, avoiding an additional solution when
+     * both branches succeed.
+     *
+     * Parentheses preserve the AST grouping.
      */
     private String logicalGoal(
             BinaryExpression expression,
@@ -165,20 +173,47 @@ public final class PrologWhereGoalBuilder {
                 matchedVariables
         );
 
-        String operator = conjunction ? ", " : " ; ";
+        if (conjunction) {
 
-        return "(("
+            return "(("
+                    + left
+                    + "), ("
+                    + right
+                    + "))";
+        }
+
+        /*
+         * IMPORTANT P2 FIX:
+         *
+         * A plain Prolog disjunction may generate
+         * multiple solutions for the same matched row.
+         *
+         * For example:
+         *
+         * (Age > 18 ; Age < 40)
+         *
+         * If Age = 30, both branches succeed.
+         *
+         * once/1 commits to the first successful
+         * alternative for the current evaluation,
+         * preventing duplication caused solely
+         * by overlapping OR branches.
+         *
+         * This is an initial boolean-filter strategy.
+         * Cases involving multiple possible property
+         * values and later variable bindings require
+         * separate regression coverage.
+         */
+        return "once((("
                 + left
-                + ")"
-                + operator
-                + "("
+                + ") ; ("
                 + right
-                + "))";
+                + ")))";
     }
 
     /**
-     * Generates a comparison and its required
-     * property-access goals.
+     * Generates a comparison with all
+     * prerequisite property-access goals.
      */
     private String comparisonGoal(
             BinaryExpression expression,
@@ -209,22 +244,50 @@ public final class PrologWhereGoalBuilder {
         String comparison = switch (expression.operator()) {
 
             case EQUAL ->
-                    "cy_eq(" + leftTerm + ", " + rightTerm + ")";
+                    "cy_eq("
+                            + leftTerm
+                            + ", "
+                            + rightTerm
+                            + ")";
 
             case NOT_EQUAL ->
-                    "cy_neq(" + leftTerm + ", " + rightTerm + ")";
+                    "cy_neq("
+                            + leftTerm
+                            + ", "
+                            + rightTerm
+                            + ")";
 
             case LESS_THAN ->
-                    numericComparison(leftTerm, "<", rightTerm, goals);
+                    numericComparison(
+                            leftTerm,
+                            "<",
+                            rightTerm,
+                            goals
+                    );
 
             case GREATER_THAN ->
-                    numericComparison(leftTerm, ">", rightTerm, goals);
+                    numericComparison(
+                            leftTerm,
+                            ">",
+                            rightTerm,
+                            goals
+                    );
 
             case LESS_THAN_OR_EQUAL ->
-                    numericComparison(leftTerm, "=<", rightTerm, goals);
+                    numericComparison(
+                            leftTerm,
+                            "=<",
+                            rightTerm,
+                            goals
+                    );
 
             case GREATER_THAN_OR_EQUAL ->
-                    numericComparison(leftTerm, ">=", rightTerm, goals);
+                    numericComparison(
+                            leftTerm,
+                            ">=",
+                            rightTerm,
+                            goals
+                    );
 
             default -> throw unsupported(
                     "Comparison operator: "
@@ -238,10 +301,8 @@ public final class PrologWhereGoalBuilder {
     }
 
     /**
-     * Adds numeric guards before an ordering comparison.
-     *
-     * These guards prevent string values from being passed
-     * to Prolog arithmetic ordering operators.
+     * Adds numeric guards before an
+     * arithmetic ordering comparison.
      */
     private static String numericComparison(
             String left,
@@ -250,17 +311,28 @@ public final class PrologWhereGoalBuilder {
             List<String> goals
     ) {
 
-        goals.add("number(" + left + ")");
-        goals.add("number(" + right + ")");
+        goals.add(
+                "number(" + left + ")"
+        );
 
-        return "(" + left + " " + operator + " " + right + ")";
+        goals.add(
+                "number(" + right + ")"
+        );
+
+        return "("
+                + left
+                + " "
+                + operator
+                + " "
+                + right
+                + ")";
     }
 
     /**
-     * Compiles a value used by a comparison.
+     * Compiles an expression used as a value.
      *
-     * A compiled value contains its Prolog term and
-     * any prerequisite goals needed to obtain it.
+     * The result contains the Prolog term
+     * and any goals required to obtain it.
      */
     private CompiledValue compileValue(
             Expression expression,
@@ -276,7 +348,9 @@ public final class PrologWhereGoalBuilder {
             );
 
             return new CompiledValue(
-                    symbols.resolveVariable(variable.name()),
+                    symbols.resolveVariable(
+                            variable.name()
+                    ),
                     List.of()
             );
         }
@@ -297,7 +371,9 @@ public final class PrologWhereGoalBuilder {
             );
 
             String elementId =
-                    symbols.resolveVariable(owner.name());
+                    symbols.resolveVariable(
+                            owner.name()
+                    );
 
             String propertyValue =
                     symbols.resolveProperty(
@@ -309,7 +385,9 @@ public final class PrologWhereGoalBuilder {
                     "user_amigos_prop("
                             + elementId
                             + ", "
-                            + quoteAtom(property.property())
+                            + quoteAtom(
+                                    property.property()
+                            )
                             + ", "
                             + propertyValue
                             + ")";
@@ -321,6 +399,7 @@ public final class PrologWhereGoalBuilder {
         }
 
         if (expression instanceof StringLiteralExpression literal) {
+
             return new CompiledValue(
                     quoteAtom(literal.value()),
                     List.of()
@@ -328,6 +407,7 @@ public final class PrologWhereGoalBuilder {
         }
 
         if (expression instanceof IntegerLiteralExpression literal) {
+
             return new CompiledValue(
                     Long.toString(literal.value()),
                     List.of()
@@ -335,6 +415,7 @@ public final class PrologWhereGoalBuilder {
         }
 
         if (expression instanceof FloatLiteralExpression literal) {
+
             return new CompiledValue(
                     Double.toString(literal.value()),
                     List.of()
@@ -342,6 +423,7 @@ public final class PrologWhereGoalBuilder {
         }
 
         if (expression instanceof BooleanLiteralExpression literal) {
+
             return new CompiledValue(
                     literal.value() ? "true" : "false",
                     List.of()
@@ -349,6 +431,7 @@ public final class PrologWhereGoalBuilder {
         }
 
         if (expression instanceof BinaryExpression binary) {
+
             return compileArithmetic(
                     binary,
                     symbols,
@@ -357,6 +440,7 @@ public final class PrologWhereGoalBuilder {
         }
 
         if (expression instanceof NullLiteralExpression) {
+
             throw unsupported(
                     "NULL comparisons"
             );
@@ -369,8 +453,10 @@ public final class PrologWhereGoalBuilder {
     }
 
     /**
-     * Compiles arithmetic AST expressions into
-     * a calculated Prolog temporary variable.
+     * Generates Prolog arithmetic calculations.
+     *
+     * Arithmetic expressions are evaluated into
+     * temporary variables using is/2.
      */
     private CompiledValue compileArithmetic(
             BinaryExpression expression,
@@ -438,8 +524,8 @@ public final class PrologWhereGoalBuilder {
     }
 
     /**
-     * Ensures that a referenced variable
-     * is defined in the MATCH pattern.
+     * Ensures that a referenced source variable
+     * was introduced by MATCH.
      */
     private static void ensureMatched(
             String name,
@@ -456,7 +542,7 @@ public final class PrologWhereGoalBuilder {
     }
 
     /**
-     * Escapes a text value as a SWI-Prolog atom.
+     * Escapes text as a SWI-Prolog atom.
      */
     private static String quoteAtom(
             String value
@@ -474,8 +560,8 @@ public final class PrologWhereGoalBuilder {
     }
 
     /**
-     * Creates a descriptive exception for
-     * unsupported WHERE expressions.
+     * Creates an exception for a WHERE
+     * feature not supported by CodeGen.
      */
     private static UnsupportedOperationException unsupported(
             String feature
@@ -489,7 +575,7 @@ public final class PrologWhereGoalBuilder {
 
     /**
      * Immutable intermediate representation
-     * of one compiled WHERE value.
+     * of a compiled WHERE value.
      */
     private record CompiledValue(
             String term,
@@ -509,6 +595,7 @@ public final class PrologWhereGoalBuilder {
             );
 
             if (term.isBlank()) {
+
                 throw new IllegalArgumentException(
                         "Compiled term cannot be blank"
                 );
