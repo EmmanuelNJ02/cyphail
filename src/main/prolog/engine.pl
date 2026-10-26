@@ -24,9 +24,13 @@
  * graph access predicates, comparisons,
  * and query lifecycle operations.
  *
- * Sprint P2 SET support:
- * Original sample node properties are dynamic
- * so they can be updated by graph_store.pl.
+ * Sprint P2:
+ * Original sample node properties and
+ * relationship properties are dynamic.
+ *
+ * This permits graph_store.pl to implement
+ * SET and REMOVE for original graph data
+ * without changing the stored CREATE data.
  *
  * Important:
  * Do not write messages to standard output
@@ -35,24 +39,24 @@
 
 
 % ============================================
-% DYNAMIC PROPERTY DECLARATION
+% DYNAMIC PROPERTY DECLARATIONS
 % ============================================
 
-% Required for SET on original sample nodes.
+% Properties of original sample nodes.
 %
-% The property predicate must support:
-%
-% retractall/1
-% assertz/1
-%
-% Without this declaration SWI-Prolog raises:
-%
-% permission_error(modify, static_procedure, ...)
-%
-% The declaration does not remove existing
-% sample facts or change their initial values.
+% Required for SET and REMOVE.
 
 :- dynamic user_amigos_node_prop/3.
+
+
+% Properties of original sample relationships.
+%
+% Required for future mutations of properties
+% belonging to relationships e1, e2, e3, e4.
+%
+% The declaration introduces no new facts.
+
+:- dynamic user_amigos_edge_prop/3.
 
 
 % ============================================
@@ -174,7 +178,7 @@ user_amigos_label(EdgeId, Type) :-
 % MATCH, WHERE and RETURN.
 %
 % Because the predicate is dynamic,
-% SET can now update their values.
+% SET and REMOVE can modify their values.
 
 user_amigos_node_prop(
     id1,
@@ -444,8 +448,8 @@ user_amigos_edge(
 % Retrieves a node property from
 % the professor's original graph.
 %
-% These facts can now be modified
-% by SET through graph_store.pl.
+% These facts can be modified by
+% SET and REMOVE through graph_store.pl.
 
 user_amigos_prop(
     NodeId,
@@ -470,6 +474,41 @@ user_amigos_prop(
     cy_get_node_property(
         amigos,
         NodeId,
+        Property,
+        Value
+    ).
+
+
+% ============================================
+% ORIGINAL RELATIONSHIP PROPERTY ACCESS
+% ============================================
+
+% Retrieves properties attached to original
+% relationships defined in engine.pl.
+%
+% For example, a dynamically stored fact:
+%
+% user_amigos_edge_prop(e1, since, 2020).
+%
+% can be accessed using:
+%
+% user_amigos_prop(e1, since, Value).
+%
+% Initially the original sample relationships
+% have no property facts. This clause does
+% not add or invent any initial property.
+%
+% The dynamic predicate will allow mutations
+% performed by graph_store.pl to be observed
+% through MATCH, WHERE and RETURN.
+
+user_amigos_prop(
+    EdgeId,
+    Property,
+    Value
+) :-
+    user_amigos_edge_prop(
+        EdgeId,
         Property,
         Value
     ).

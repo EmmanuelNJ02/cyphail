@@ -39,11 +39,16 @@
  * SET additionally supports original sample
  * graph nodes defined in engine.pl.
  *
+ * REMOVE additionally supports original sample
+ * graph nodes and relationships.
+ *
  * IMPORTANT:
  *
- * engine.pl must declare
- * user_amigos_node_prop/3 as dynamic for
- * sample graph property updates.
+ * engine.pl must declare the following
+ * predicates as dynamic:
+ *
+ * user_amigos_node_prop/3
+ * user_amigos_edge_prop/3
  */
 
 
@@ -523,7 +528,7 @@ cy_remove_property(
 
 
 % ============================================
-% NODE PROPERTY REMOVAL
+% NODE PROPERTY REMOVAL - STORED NODES
 % ============================================
 
 % Removes a property from a node stored
@@ -532,6 +537,9 @@ cy_remove_property(
 % Graph  - Graph name.
 % NodeId - Node identifier.
 % Key    - Property to remove.
+%
+% This clause preserves the existing behavior
+% for nodes created with CREATE.
 
 cy_remove_node_property(Graph, NodeId, Key) :-
     atom(Graph),
@@ -570,11 +578,91 @@ cy_remove_node_property(Graph, NodeId, Key) :-
 
 
 % ============================================
-% RELATIONSHIP PROPERTY REMOVAL
+% NODE PROPERTY REMOVAL - ORIGINAL GRAPH
+% ============================================
+
+% Sprint P2 REMOVE support for original
+% nodes defined in engine.pl.
+%
+% These nodes use dynamic Prolog facts
+% rather than the recorded database.
+%
+% Example:
+%
+% MATCH (a:Person {name: 'Juan Perez'})
+% REMOVE a.age
+% RETURN a.name
+%
+% The operation removes only the requested
+% property, preserving the original node,
+% labels, relationships and other properties.
+%
+% Example original facts:
+%
+% user_amigos_node(id1).
+% user_amigos_node_prop(id1, name, 'Juan Perez').
+% user_amigos_node_prop(id1, age, 30).
+%
+% After REMOVE a.age:
+%
+% user_amigos_node(id1).
+% user_amigos_node_prop(id1, name, 'Juan Perez').
+%
+% The age fact no longer exists.
+%
+% Repeated property facts are all removed
+% for the requested key.
+%
+% Removing a nonexistent property succeeds
+% without changing the original node.
+%
+% The update persists for the lifetime
+% of the active SWI-Prolog process.
+%
+% IMPORTANT:
+%
+% engine.pl must declare
+% user_amigos_node_prop/3 as dynamic.
+
+cy_remove_node_property(amigos, NodeId, Key) :-
+    atom(NodeId),
+    atom(Key),
+
+    % Only handle original sample nodes.
+    % Stored CREATE nodes are handled above.
+
+    \+ cy_get_node(
+        amigos,
+        NodeId,
+        _,
+        _
+    ),
+
+    % Verify that the original node exists.
+
+    user_amigos_node(NodeId),
+
+    % Remove every property fact matching
+    % the requested node and property key.
+
+    retractall(
+        user_amigos_node_prop(
+            NodeId,
+            Key,
+            _
+        )
+    ).
+
+
+% ============================================
+% RELATIONSHIP PROPERTY REMOVAL - STORED EDGES
 % ============================================
 
 % Removes a property from a relationship
 % stored in the recorded database.
+%
+% Preserves the other relationship properties
+% and the relationship itself.
 
 cy_remove_edge_property(Graph, EdgeId, Key) :-
     atom(Graph),
@@ -614,6 +702,82 @@ cy_remove_edge_property(Graph, EdgeId, Key) :-
     ),
 
     erase(Reference).
+
+
+% ============================================
+% RELATIONSHIP PROPERTY REMOVAL - ORIGINAL GRAPH
+% ============================================
+
+% Sprint P2 REMOVE support for original
+% relationships defined in engine.pl.
+%
+% Original relationships include:
+%
+% user_amigos_edge(e1, id1, id2).
+% user_amigos_edge(e2, id1, id4).
+% user_amigos_edge(e3, id2, id1).
+% user_amigos_edge(e4, id2, id3).
+%
+% They are not stored in the recorded database.
+%
+% Their optional properties are represented by
+% dynamic facts of the following form:
+%
+% user_amigos_edge_prop(EdgeId, Key, Value).
+%
+% This clause removes all facts matching
+% the relationship ID and property name.
+%
+% The relationship, its type and its
+% endpoints are preserved.
+%
+% Removing a nonexistent property succeeds
+% when the relationship itself exists.
+%
+% IMPORTANT:
+%
+% engine.pl must declare
+% user_amigos_edge_prop/3 as dynamic.
+
+cy_remove_edge_property(amigos, EdgeId, Key) :-
+    atom(EdgeId),
+    atom(Key),
+
+    % This implementation applies only
+    % to original sample relationships.
+    %
+    % Relationships created through CREATE
+    % are handled by the preceding clause.
+
+    \+ cy_get_edge(
+        amigos,
+        EdgeId,
+        _,
+        _,
+        _,
+        _
+    ),
+
+    % The original relationship must exist.
+
+    user_amigos_edge(
+        EdgeId,
+        _,
+        _
+    ),
+
+    % Remove only the requested property.
+    %
+    % retractall also removes duplicates
+    % for the same property key.
+
+    retractall(
+        user_amigos_edge_prop(
+            EdgeId,
+            Key,
+            _
+        )
+    ).
 
 
 % ============================================

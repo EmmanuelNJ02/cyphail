@@ -47,8 +47,12 @@ import java.util.stream.Collectors;
  * - CREATE followed by SET.
  * - RETURN after SET.
  * - Updated property bindings.
+ * - REMOVE node properties.
+ * - REMOVE relationship properties.
+ * - Multiple REMOVE properties.
+ * - Property binding invalidation after REMOVE.
  *
- * REMOVE and DELETE CodeGen remain pending.
+ * DELETE CodeGen remains pending.
  */
 public final class PrologCodeGenerator {
 
@@ -93,6 +97,16 @@ public final class PrologCodeGenerator {
         private final PrologSetGoalBuilder setBuilder =
                 new PrologSetGoalBuilder();
 
+        /**
+         * Sprint P2 REMOVE:
+         *
+         * Uses the dedicated REMOVE goal builder
+         * to translate property removals into
+         * SWI-Prolog graph mutation predicates.
+         */
+        private final PrologRemoveGoalBuilder removeBuilder =
+                new PrologRemoveGoalBuilder();
+
         // =====================================================
         // QUERY STATE
         // =====================================================
@@ -117,8 +131,9 @@ public final class PrologCodeGenerator {
          * Stores the names of variables representing
          * relationships.
          *
-         * This is required by SET to distinguish
-         * between node and relationship mutations.
+         * This is required by SET and REMOVE
+         * to distinguish between node and
+         * relationship mutations.
          */
         private final Set<String> relationshipVariables =
                 new HashSet<>();
@@ -127,8 +142,8 @@ public final class PrologCodeGenerator {
          * Properties whose values have already
          * been bound by earlier Prolog goals.
          *
-         * SET invalidates the binding for
-         * each modified property.
+         * SET and REMOVE invalidate the binding
+         * for each modified property.
          */
         private final Set<String> boundProperties =
                 new HashSet<>();
@@ -158,7 +173,7 @@ public final class PrologCodeGenerator {
          *
          * 1. MATCH, when present.
          * 2. WHERE, when present.
-         * 3. CREATE, SET and other updates.
+         * 3. CREATE, SET, REMOVE and other updates.
          * 4. RETURN, when present.
          *
          * A standalone CREATE does not require MATCH.
@@ -223,9 +238,15 @@ public final class PrologCodeGenerator {
 
                     visitSetClause(set);
 
-                } else if (update instanceof RemoveClause) {
+                } else if (update instanceof RemoveClause remove) {
 
-                    throw unsupported("REMOVE");
+                    /**
+                     * Sprint P2 REMOVE:
+                     *
+                     * Delegate property removals
+                     * to the dedicated goal builder.
+                     */
+                    visitRemoveClause(remove);
 
                 } else if (update instanceof DeleteClause delete) {
 
@@ -288,8 +309,9 @@ public final class PrologCodeGenerator {
              * Prolog predicates without arguments
              * must be represented as atoms.
              *
-             * This is necessary for CREATE and
-             * SET statements without RETURN.
+             * This is necessary for CREATE,
+             * SET and REMOVE statements
+             * without RETURN.
              */
             String queryHead = columns.isEmpty()
                     ? "cyphail_query_p2"
@@ -396,7 +418,7 @@ public final class PrologCodeGenerator {
                      * by MATCH relationships.
                      *
                      * These variables are used later
-                     * by SET relationship mutations.
+                     * by SET and REMOVE mutations.
                      */
                     step.relationship()
                             .variable()
@@ -828,6 +850,69 @@ public final class PrologCodeGenerator {
         }
 
         // =====================================================
+        // REMOVE
+        // =====================================================
+
+        /**
+         * Compiles REMOVE property operations.
+         *
+         * Supported examples:
+         *
+         * MATCH (p:Product)
+         * REMOVE p.discount
+         * RETURN p.id
+         *
+         * MATCH (p:Product)
+         * REMOVE p.discount, p.oldPrice
+         * RETURN p.id
+         *
+         * MATCH (a)-[r:KNOWS]->(b)
+         * REMOVE r.since
+         *
+         * The builder chooses the correct mutation
+         * predicate depending on whether the
+         * variable represents a node or relationship.
+         *
+         * Property mappings are invalidated after
+         * each removal, avoiding reuse of stale
+         * Prolog property bindings.
+         */
+        private String visitRemoveClause(RemoveClause clause) {
+
+            Objects.requireNonNull(
+                    clause,
+                    "REMOVE clause cannot be null"
+            );
+
+            List<String> removeGoals =
+                    removeBuilder.generate(
+                            clause,
+                            symbols,
+                            matchedVariables,
+                            relationshipVariables,
+                            boundProperties,
+                            (variable, property) ->
+                                    symbols.invalidateProperty(
+                                            variable,
+                                            property
+                                    )
+                    );
+
+            /**
+             * Preserve the original order of
+             * REMOVE property operations.
+             */
+            goals.addAll(
+                    removeGoals
+            );
+
+            return String.join(
+                    ", ",
+                    removeGoals
+            );
+        }
+
+        // =====================================================
         // RETURN
         // =====================================================
 
@@ -959,7 +1044,7 @@ public final class PrologCodeGenerator {
                 );
 
                 /**
-                 * If SET modified this property,
+                 * If SET or REMOVE modified this property,
                  * the refreshed mapping is used.
                  */
                 prologVariable =
@@ -1000,12 +1085,16 @@ public final class PrologCodeGenerator {
          * the current property value has not
          * already been bound.
          *
-         * After SET:
+         * After SET or REMOVE:
          *
          * 1. The previous property binding is removed.
          * 2. PrologVariableTable provides a fresh
          *    variable for the property.
-         * 3. RETURN retrieves the updated value.
+         * 3. Future accesses use the new binding.
+         *
+         * Reading a property that no longer exists
+         * still depends on the graph engine's
+         * missing-property semantics.
          */
         @Override
         public String visitPropertyExpression(
@@ -1050,9 +1139,9 @@ public final class PrologCodeGenerator {
              * true when this property needs
              * a new lookup.
              *
-             * For a property modified by SET,
-             * its old binding has already
-             * been invalidated.
+             * For a property modified by SET
+             * or REMOVE, its old binding has
+             * already been invalidated.
              */
             if (boundProperties.add(key)) {
 
