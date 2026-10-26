@@ -51,8 +51,14 @@ import java.util.stream.Collectors;
  * - REMOVE relationship properties.
  * - Multiple REMOVE properties.
  * - Property binding invalidation after REMOVE.
+ * - DELETE node variables.
+ * - DELETE relationship variables.
+ * - DELETE multiple graph elements.
+ * - DETACH DELETE node variables.
+ * - DELETE after MATCH or CREATE.
  *
- * DELETE CodeGen remains pending.
+ * DELETE goal execution requires the corresponding
+ * predicates to be implemented in SWI-Prolog.
  */
 public final class PrologCodeGenerator {
 
@@ -107,6 +113,17 @@ public final class PrologCodeGenerator {
         private final PrologRemoveGoalBuilder removeBuilder =
                 new PrologRemoveGoalBuilder();
 
+        /**
+         * Sprint P2 DELETE:
+         *
+         * Generates Prolog goals for deleting
+         * nodes and relationships.
+         *
+         * Also supports DETACH DELETE.
+         */
+        private final PrologDeleteGoalBuilder deleteBuilder =
+                new PrologDeleteGoalBuilder();
+
         // =====================================================
         // QUERY STATE
         // =====================================================
@@ -131,7 +148,7 @@ public final class PrologCodeGenerator {
          * Stores the names of variables representing
          * relationships.
          *
-         * This is required by SET and REMOVE
+         * This is required by SET, REMOVE and DELETE
          * to distinguish between node and
          * relationship mutations.
          */
@@ -173,7 +190,7 @@ public final class PrologCodeGenerator {
          *
          * 1. MATCH, when present.
          * 2. WHERE, when present.
-         * 3. CREATE, SET, REMOVE and other updates.
+         * 3. CREATE, SET, REMOVE, DELETE and updates.
          * 4. RETURN, when present.
          *
          * A standalone CREATE does not require MATCH.
@@ -240,12 +257,6 @@ public final class PrologCodeGenerator {
 
                 } else if (update instanceof RemoveClause remove) {
 
-                    /**
-                     * Sprint P2 REMOVE:
-                     *
-                     * Delegate property removals
-                     * to the dedicated goal builder.
-                     */
                     visitRemoveClause(remove);
 
                 } else if (update instanceof DeleteClause delete) {
@@ -310,7 +321,7 @@ public final class PrologCodeGenerator {
              * must be represented as atoms.
              *
              * This is necessary for CREATE,
-             * SET and REMOVE statements
+             * SET, REMOVE and DELETE statements
              * without RETURN.
              */
             String queryHead = columns.isEmpty()
@@ -418,7 +429,7 @@ public final class PrologCodeGenerator {
                      * by MATCH relationships.
                      *
                      * These variables are used later
-                     * by SET and REMOVE mutations.
+                     * by SET, REMOVE and DELETE.
                      */
                     step.relationship()
                             .variable()
@@ -913,6 +924,70 @@ public final class PrologCodeGenerator {
         }
 
         // =====================================================
+        // DELETE
+        // =====================================================
+
+        /**
+         * Compiles DELETE and DETACH DELETE.
+         *
+         * Examples:
+         *
+         * MATCH (a)-[r:KNOWS]->(b)
+         * DELETE r
+         *
+         * MATCH (p:Person)
+         * DELETE p
+         *
+         * MATCH (p:Person)
+         * DETACH DELETE p
+         *
+         * MATCH (a)-[r:KNOWS]->(b)
+         * DELETE r, a
+         *
+         * CREATE (a:Person)-[r:KNOWS]->(b:Person)
+         * DELETE r
+         * RETURN a
+         *
+         * The builder distinguishes node and
+         * relationship variables.
+         *
+         * The Prolog engine is responsible for
+         * enforcing graph integrity constraints.
+         */
+        @Override
+        public String visitDeleteClause(DeleteClause clause) {
+
+            Objects.requireNonNull(
+                    clause,
+                    "DELETE clause cannot be null"
+            );
+
+            List<String> deleteGoals =
+                    deleteBuilder.generate(
+                            clause,
+                            symbols,
+                            matchedVariables,
+                            relationshipVariables
+                    );
+
+            /*
+             * Append DELETE goals in the correct
+             * compilation order.
+             *
+             * Previous MATCH, WHERE, CREATE, SET
+             * and REMOVE goals remain unchanged.
+             */
+            goals.addAll(
+                    deleteGoals
+            );
+
+            return String.join(
+                    ", ",
+                    deleteGoals
+            );
+        }
+
+        // =====================================================
         // RETURN
         // =====================================================
 
@@ -1277,18 +1352,6 @@ public final class PrologCodeGenerator {
             return new UnsupportedOperationException(
                     "P2 CodeGen support is pending for: "
                             + feature
-            );
-        }
-
-        /**
-         * DELETE CodeGen will be implemented
-         * after SET and REMOVE.
-         */
-        @Override
-        public String visitDeleteClause(DeleteClause clause) {
-
-            throw unsupported(
-                    "DELETE"
             );
         }
 

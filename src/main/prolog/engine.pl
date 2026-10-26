@@ -25,6 +25,7 @@
  * and query lifecycle operations.
  *
  * Sprint P2:
+ *
  * Original sample node properties and
  * relationship properties are dynamic.
  *
@@ -32,7 +33,18 @@
  * SET and REMOVE for original graph data
  * without changing the stored CREATE data.
  *
+ * DELETE support:
+ *
+ * Original sample nodes, relationships and
+ * labels are declared dynamic to permit
+ * deletion during the active Prolog session.
+ *
+ * The rules accessing CREATE graph elements
+ * must be preserved when deleting original
+ * facts from the sample graph.
+ *
  * Important:
+ *
  * Do not write messages to standard output
  * while loading the engine through MQI.
  */
@@ -51,12 +63,35 @@
 
 % Properties of original sample relationships.
 %
-% Required for future mutations of properties
-% belonging to relationships e1, e2, e3, e4.
+% Required for property mutations belonging
+% to original relationships e1, e2, e3, e4.
 %
 % The declaration introduces no new facts.
 
 :- dynamic user_amigos_edge_prop/3.
+
+
+% ============================================
+% DYNAMIC GRAPH ELEMENTS - DELETE SPRINT P2
+% ============================================
+
+% Allows deletion of original sample nodes,
+% relationships and labels during the session.
+%
+% IMPORTANT:
+%
+% These predicates contain both original
+% graph facts and, where applicable, rules
+% supporting nodes created through CREATE.
+%
+% DELETE must remove only the appropriate
+% original facts and preserve those rules.
+
+:- dynamic user_amigos_node/1.
+
+:- dynamic user_amigos_edge/3.
+
+:- dynamic user_amigos_label/2.
 
 
 % ============================================
@@ -74,8 +109,11 @@
 % ============================================
 
 :- discontiguous user_amigos_label/2.
+
 :- discontiguous user_amigos_node_prop/3.
+
 :- discontiguous user_amigos_edge_prop/3.
+
 
 cy_db('amigos').
 
@@ -88,8 +126,11 @@ cy_db('amigos').
 % sample graph.
 
 user_amigos_node(id1).
+
 user_amigos_node(id2).
+
 user_amigos_node(id3).
+
 user_amigos_node(id4).
 
 
@@ -110,8 +151,11 @@ user_amigos_node(NodeId) :-
 % ============================================
 
 user_amigos_label(id1, 'Person').
+
 user_amigos_label(id2, 'Person').
+
 user_amigos_label(id3, 'Person').
+
 user_amigos_label(id3, 'Person').
 
 
@@ -120,8 +164,11 @@ user_amigos_label(id3, 'Person').
 % ============================================
 
 user_amigos_edge(e1, id1, id2).
+
 user_amigos_edge(e2, id1, id4).
+
 user_amigos_edge(e3, id2, id1).
+
 user_amigos_edge(e4, id2, id3).
 
 
@@ -130,8 +177,11 @@ user_amigos_edge(e4, id2, id3).
 % ============================================
 
 user_amigos_label(e1, 'Amigo').
+
 user_amigos_label(e2, 'Amigo').
+
 user_amigos_label(e3, 'Amigo').
+
 user_amigos_label(e4, 'Amigo').
 
 

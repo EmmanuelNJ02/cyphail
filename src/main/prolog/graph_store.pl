@@ -1,4 +1,3 @@
-
 /*
  * Universidad Nacional de Costa Rica
  * School of Informatics
@@ -873,3 +872,425 @@ cy_delete_node(Graph, NodeId) :-
     ),
 
     erase(Reference).
+
+
+% ============================================
+% DETACH NODE DELETION - SPRINT P2
+% ============================================
+
+% Deletes a stored node together with all
+% relationships connected to that node.
+%
+% Graph  - Graph identifier.
+% NodeId - Identifier of the node to delete.
+%
+% The operation:
+%
+% 1. Verifies that the stored node exists.
+% 2. Collects all incoming and outgoing edges.
+% 3. Removes duplicate edge identifiers.
+% 4. Deletes the collected relationships.
+% 5. Deletes the disconnected node.
+%
+% Duplicate removal is important for self-loops,
+% where the source and destination are the same node.
+%
+% This initial implementation handles nodes and
+% relationships stored through Cyphail CREATE.
+% Support for original sample nodes is added
+% separately.
+
+cy_detach_delete_node(Graph, NodeId) :-
+    atom(Graph),
+    atom(NodeId),
+
+    % The target stored node must exist.
+
+    cy_get_node(
+        Graph,
+        NodeId,
+        _,
+        _
+    ),
+
+    % Collect incoming and outgoing relationships.
+
+    findall(
+        EdgeId,
+        (
+            cy_get_edge(
+                Graph,
+                EdgeId,
+                _,
+                From,
+                To,
+                _
+            ),
+
+            (
+                From == NodeId
+                ;
+                To == NodeId
+            )
+        ),
+        CollectedEdges
+    ),
+
+    % Avoid processing the same relationship twice.
+
+    sort(
+        CollectedEdges,
+        UniqueEdges
+    ),
+
+    % Delete every attached stored relationship.
+
+    maplist(
+        cy_delete_edge(Graph),
+        UniqueEdges
+    ),
+
+    % Delete the node after disconnecting it.
+
+    cy_delete_node(
+        Graph,
+        NodeId
+    ).
+
+
+
+% ============================================
+% ORIGINAL GRAPH DELETION - SPRINT P2
+% ============================================
+
+% Additional clauses supporting the original
+% sample graph defined in engine.pl.
+%
+% The original graph contains facts such as:
+%
+% user_amigos_node(id1).
+% user_amigos_edge(e1, id1, id2).
+% user_amigos_label(id1, 'Person').
+%
+% These predicates also contain rules used
+% for retrieving elements created with CREATE.
+%
+% IMPORTANT:
+% Only original facts must be removed.
+% Rules supporting CREATE must be preserved.
+
+:- discontiguous cy_delete_edge/2.
+:- discontiguous cy_delete_node/2.
+:- discontiguous cy_detach_delete_node/2.
+
+
+% ============================================
+% DELETE ORIGINAL RELATIONSHIP
+% ============================================
+
+% Deletes a relationship from the original
+% professor sample graph.
+%
+% This clause complements the implementation
+% for relationships stored through CREATE.
+%
+% Only the original relationship facts and
+% their associated data are removed.
+%
+% Rules for stored relationships remain intact.
+
+cy_delete_edge(amigos, EdgeId) :-
+    atom(EdgeId),
+
+    % This clause only handles original edges.
+
+    \+ cy_get_edge(
+        amigos,
+        EdgeId,
+        _,
+        _,
+        _,
+        _
+    ),
+
+    % Retrieve references to original facts.
+    %
+    % The clause/3 call uses Body = true
+    % to select facts and exclude rules.
+
+    findall(
+        Reference,
+        clause(
+            user_amigos_edge(
+                EdgeId,
+                _,
+                _
+            ),
+            true,
+            Reference
+        ),
+        EdgeReferences
+    ),
+
+    % The original relationship must exist.
+
+    EdgeReferences \= [],
+
+    % Delete original relationship facts.
+
+    maplist(
+        erase,
+        EdgeReferences
+    ),
+
+    % Retrieve the relationship label facts.
+    %
+    % Do not delete user_amigos_label/2 rules.
+
+    findall(
+        Reference,
+        clause(
+            user_amigos_label(
+                EdgeId,
+                _
+            ),
+            true,
+            Reference
+        ),
+        LabelReferences
+    ),
+
+    maplist(
+        erase,
+        LabelReferences
+    ),
+
+    % Delete properties associated with
+    % this original relationship.
+
+    retractall(
+        user_amigos_edge_prop(
+            EdgeId,
+            _,
+            _
+        )
+    ).
+
+
+% ============================================
+% DELETE ORIGINAL NODE
+% ============================================
+
+% Deletes an original graph node only when
+% it has no incoming or outgoing edges.
+%
+% Normal DELETE must not automatically
+% disconnect a node.
+%
+% DETACH DELETE is responsible for deleting
+% connected relationships first.
+
+cy_delete_node(amigos, NodeId) :-
+    atom(NodeId),
+
+    % This clause only handles original nodes.
+
+    \+ cy_get_node(
+        amigos,
+        NodeId,
+        _,
+        _
+    ),
+
+    % Find only original node facts.
+    %
+    % Do not remove the user_amigos_node/1
+    % rule used for CREATE nodes.
+
+    findall(
+        Reference,
+        clause(
+            user_amigos_node(NodeId),
+            true,
+            Reference
+        ),
+        NodeReferences
+    ),
+
+    NodeReferences \= [],
+
+    % Reject deletion when an original
+    % outgoing relationship still exists.
+
+    \+ user_amigos_edge(
+        _,
+        NodeId,
+        _
+    ),
+
+    % Reject deletion when an original
+    % incoming relationship still exists.
+
+    \+ user_amigos_edge(
+        _,
+        _,
+        NodeId
+    ),
+
+    % Also protect against recorded edges
+    % that reference the same node ID.
+
+    \+ cy_get_edge(
+        amigos,
+        _,
+        _,
+        NodeId,
+        _,
+        _
+    ),
+
+    \+ cy_get_edge(
+        amigos,
+        _,
+        _,
+        _,
+        NodeId,
+        _
+    ),
+
+    % Remove only original node facts.
+
+    maplist(
+        erase,
+        NodeReferences
+    ),
+
+    % Remove original node label facts.
+    %
+    % Body = true excludes CREATE rules.
+
+    findall(
+        Reference,
+        clause(
+            user_amigos_label(
+                NodeId,
+                _
+            ),
+            true,
+            Reference
+        ),
+        LabelReferences
+    ),
+
+    maplist(
+        erase,
+        LabelReferences
+    ),
+
+    % Remove all properties of the node.
+    %
+    % The property predicate contains
+    % dynamic facts, not CREATE rules.
+
+    retractall(
+        user_amigos_node_prop(
+            NodeId,
+            _,
+            _
+        )
+    ).
+
+
+% ============================================
+% DETACH DELETE ORIGINAL NODE
+% ============================================
+
+% Deletes an original node together with
+% all relationships connected to it.
+%
+% Handles:
+%
+% - Outgoing relationships.
+% - Incoming relationships.
+% - Self-loop relationships.
+% - Multiple relationships.
+%
+% Other nodes must remain unchanged.
+
+cy_detach_delete_node(amigos, NodeId) :-
+    atom(NodeId),
+
+    % This clause is for original nodes,
+    % not nodes stored through CREATE.
+
+    \+ cy_get_node(
+        amigos,
+        NodeId,
+        _,
+        _
+    ),
+
+    % Verify that an original node fact
+    % exists without matching CREATE rules.
+
+    clause(
+        user_amigos_node(NodeId),
+        true,
+        _
+    ),
+
+    % Collect relationships connected
+    % to the selected original node.
+
+    findall(
+        EdgeId,
+        (
+            (
+                user_amigos_edge(
+                    EdgeId,
+                    From,
+                    To
+                )
+                ;
+                cy_get_edge(
+                    amigos,
+                    EdgeId,
+                    _,
+                    From,
+                    To,
+                    _
+                )
+            ),
+
+            (
+                From == NodeId
+                ;
+                To == NodeId
+            )
+        ),
+        CollectedEdges
+    ),
+
+    % Remove duplicate relationship IDs,
+    % including self-loop duplicates.
+
+    sort(
+        CollectedEdges,
+        UniqueEdges
+    ),
+
+    % Delete each attached relationship
+    % using the appropriate DELETE clause.
+
+    maplist(
+        cy_delete_edge(amigos),
+        UniqueEdges
+    ),
+
+    % Once disconnected, delete the node
+    % using the normal DELETE implementation.
+
+    cy_delete_node(
+        amigos,
+        NodeId
+    ).
