@@ -1,4 +1,7 @@
+
 package cr.ac.una.eif400.cyphail.frontend;
+
+import cr.ac.una.eif400.cyphail.engine.mqi.MqiBroker;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,16 +22,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Integration tests for the Sprint P2 .load REPL command.
+ * Integration tests for the Sprint P2 .load command.
  *
- * Verifies that the complete REPL can load Cyphail
- * source files, dispatch semicolon-terminated statements
- * and recover from file-related errors.
+ * These tests verify that Cyphail reads source files,
+ * processes semicolon-terminated statements and
+ * executes queries using the real SWI-Prolog MQI engine.
  *
- * The existing Sprint P1 query handler is used
- * temporarily to verify statement dispatch.
- * Real Prolog execution remains part of the
- * final Sprint P2 integration.
+ * The previous simulated query results are no longer used.
  *
  * Project: Cyphail - Sprint P2
  * Course: EIF400 - Paradigmas de Programacion
@@ -36,53 +36,73 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * School: Escuela de Informatica
  * Group Code: 04-10am
  *
- * Authors:
- * Emmanuel Nunez Jimenez
+ * Team Members:
+ * Emmanuel Núñez Jiménez
  * Valery Alfaro Morales
- * Roy Arias Mejia
+ * Roy Arias Mejía
  * Keynell Molina Mora
  * Julissa Solano Valverde
  *
- * @author Emmanuel Nunez Jimenez
+ * @author Emmanuel Núñez Jiménez
  * @author Valery Alfaro Morales
- * @author Roy Arias Mejia
+ * @author Roy Arias Mejía
  * @author Keynell Molina Mora
  * @author Julissa Solano Valverde
  */
 class ReplLoadIntegrationTest {
 
     private static final String SAMPLE_QUERY =
-            "MATCH (p:Persona) RETURN p.nombre, p.edad;";
+            "MATCH (p:Person) RETURN p.name, p.age;";
 
     @TempDir
     Path temporaryDirectory;
 
     private InputStream originalIn;
+
     private PrintStream originalOut;
+
+    private PrintStream testOutput;
+
     private ByteArrayOutputStream output;
 
+    /**
+     * Prepares the console for the integration test.
+     */
     @BeforeEach
     void setUp() {
+
         originalIn = System.in;
         originalOut = System.out;
 
         output = new ByteArrayOutputStream();
 
-        System.setOut(
-                new PrintStream(
-                        output,
-                        true,
-                        StandardCharsets.UTF_8
-                )
+        testOutput = new PrintStream(
+                output,
+                true,
+                StandardCharsets.UTF_8
         );
+
+        System.setOut(testOutput);
     }
 
+    /**
+     * Restores the console after each test.
+     */
     @AfterEach
     void tearDown() {
+
         System.setIn(originalIn);
         System.setOut(originalOut);
+
+        if (testOutput != null) {
+            testOutput.close();
+        }
     }
 
+    /**
+     * Test 1:
+     * Loads and executes a single Cyphail statement.
+     */
     @Test
     void shouldLoadAndProcessSingleStatement()
             throws IOException {
@@ -96,34 +116,47 @@ class ReplLoadIntegrationTest {
                 loadCommand(file) + "\n.exit\n"
         );
 
-        assertTrue(result.contains("p.nombre"));
-        assertTrue(result.contains("p.edad"));
-        assertTrue(result.contains("Ana"));
-        assertTrue(result.contains("28"));
+        assertTrue(result.contains("p.name"));
+        assertTrue(result.contains("p.age"));
+
+        assertTrue(result.contains("Juan Perez"));
+        assertTrue(result.contains("Jorge Soto"));
 
         assertTrue(
                 result.contains(
                         "(1 statement(s) dispatched)"
                 )
         );
+
+        assertFalse(result.contains("42 ms"));
     }
 
+    /**
+     * Test 2:
+     * Loads a Cyphail statement written on
+     * several lines.
+     */
     @Test
     void shouldLoadMultilineStatement()
             throws IOException {
 
         Path file = createScript(
                 "multiline.cyphail",
-                "MATCH (p:Persona)\n"
-                        + "RETURN p.nombre, p.edad;\n"
+                """
+                MATCH (p:Person)
+                RETURN p.name, p.age;
+                """
         );
 
         String result = runSession(
                 loadCommand(file) + "\n.exit\n"
         );
 
-        assertTrue(result.contains("Ana"));
-        assertTrue(result.contains("28"));
+        assertTrue(result.contains("p.name"));
+        assertTrue(result.contains("p.age"));
+
+        assertTrue(result.contains("Juan Perez"));
+        assertTrue(result.contains("Jorge Soto"));
 
         assertTrue(
                 result.contains(
@@ -138,6 +171,11 @@ class ReplLoadIntegrationTest {
         );
     }
 
+    /**
+     * Test 3:
+     * Executes two statements from the same file
+     * using a persistent MQI session.
+     */
     @Test
     void shouldProcessTwoStatementsFromFile()
             throws IOException {
@@ -156,7 +194,7 @@ class ReplLoadIntegrationTest {
                 2,
                 countOccurrences(
                         result,
-                        "OK. Query available after"
+                        "p.name p.age"
                 )
         );
 
@@ -165,8 +203,18 @@ class ReplLoadIntegrationTest {
                         "(2 statement(s) dispatched)"
                 )
         );
+
+        assertFalse(
+                result.contains(
+                        "MQI communication error:"
+                )
+        );
     }
 
+    /**
+     * Test 4:
+     * Accepts a quoted file path containing spaces.
+     */
     @Test
     void shouldAcceptFilePathWithSpaces()
             throws IOException {
@@ -180,15 +228,28 @@ class ReplLoadIntegrationTest {
                 loadCommand(file) + "\n.exit\n"
         );
 
-        assertTrue(result.contains("Ana"));
+        assertTrue(result.contains("Juan Perez"));
 
         assertTrue(
                 result.contains("File processed:")
         );
+
+        assertTrue(
+                result.contains(
+                        "(1 statement(s) dispatched)"
+                )
+        );
     }
 
+    /**
+     * Test 5:
+     * Reports a missing file without stopping
+     * the interactive REPL.
+     */
     @Test
-    void shouldReportMissingFileAndKeepReplRunning() {
+    void shouldReportMissingFileAndKeepReplRunning()
+            throws IOException {
+
         Path missingFile = temporaryDirectory.resolve(
                 "missing.cyphail"
         );
@@ -211,8 +272,15 @@ class ReplLoadIntegrationTest {
         );
     }
 
+    /**
+     * Test 6:
+     * Rejects a file path without quotes
+     * and keeps the REPL running.
+     */
     @Test
-    void shouldRejectUnquotedPathAndKeepReplRunning() {
+    void shouldRejectUnquotedPathAndKeepReplRunning()
+            throws IOException {
+
         String result = runSession(
                 ".load example.cyphail\n"
                         + ".help\n"
@@ -220,9 +288,7 @@ class ReplLoadIntegrationTest {
         );
 
         assertTrue(
-                result.contains(
-                        "Usage: .load"
-                )
+                result.contains("Usage: .load")
         );
 
         assertTrue(
@@ -232,14 +298,21 @@ class ReplLoadIntegrationTest {
         );
     }
 
+    /**
+     * Test 7:
+     * Reports incomplete source statements
+     * instead of executing them.
+     */
     @Test
     void shouldReportIncompleteStatementInLoadedFile()
             throws IOException {
 
         Path file = createScript(
                 "incomplete.cyphail",
-                "MATCH (p:Persona)\n"
-                        + "RETURN p.nombre, p.edad\n"
+                """
+                MATCH (p:Person)
+                RETURN p.name, p.age
+                """
         );
 
         String result = runSession(
@@ -253,19 +326,17 @@ class ReplLoadIntegrationTest {
         );
 
         assertFalse(
-                result.contains(
-                        "OK. Query available after"
-                )
+                result.contains("p.name p.age")
         );
     }
 
     /**
-     * Creates a temporary UTF-8 Cyphail source file.
+     * Creates a temporary UTF-8 Cyphail script.
      *
      * @param filename source file name
-     * @param contents file contents
-     * @return created file path
-     * @throws IOException when writing the file fails
+     * @param contents source code
+     * @return created script path
+     * @throws IOException if file creation fails
      */
     private Path createScript(
             String filename,
@@ -284,22 +355,30 @@ class ReplLoadIntegrationTest {
     }
 
     /**
-     * Builds a valid REPL .load command.
+     * Builds a valid .load command using a quoted path.
      *
-     * @param file source file path
-     * @return command with a quoted path
+     * @param file source script
+     * @return complete .load command
      */
     private String loadCommand(Path file) {
+
         return ".load \"" + file + "\"";
     }
 
     /**
-     * Starts a complete REPL session with simulated input.
+     * Starts the real Sprint P2 REPL.
+     *
+     * Creates an independent SWI-Prolog MQI session,
+     * executes all supplied commands and closes
+     * the session when processing finishes.
      *
      * @param commands input lines
-     * @return captured console output
+     * @return captured REPL output
+     * @throws IOException if MQI communication fails
      */
-    private String runSession(String commands) {
+    private String runSession(String commands)
+            throws IOException {
+
         System.setIn(
                 new ByteArrayInputStream(
                         commands.getBytes(
@@ -308,26 +387,55 @@ class ReplLoadIntegrationTest {
                 )
         );
 
-        new Repl().start();
+        Path engineFile = Path.of(
+                "src",
+                "main",
+                "prolog",
+                "engine.pl"
+        ).toAbsolutePath().normalize();
 
-        return output.toString(StandardCharsets.UTF_8);
+        try (MqiBroker broker = MqiBroker.start(engineFile)) {
+
+            CommandRouter router =
+                    new CommandRouter(broker);
+
+            CyphailStatementBuffer statementBuffer =
+                    new CyphailStatementBuffer();
+
+            Repl repl = new Repl(
+                    router,
+                    statementBuffer
+            );
+
+            repl.start();
+        }
+
+        return output.toString(
+                StandardCharsets.UTF_8
+        );
     }
 
     /**
-     * Counts occurrences of a text fragment.
+     * Counts occurrences of a fragment.
      *
-     * @param source full text
-     * @param fragment searched fragment
-     * @return number of occurrences
+     * @param source complete output
+     * @param fragment expected text
+     * @return occurrence count
      */
     private int countOccurrences(
             String source,
             String fragment
     ) {
+
         int count = 0;
         int index = 0;
 
-        while ((index = source.indexOf(fragment, index)) != -1) {
+        while (
+                (index = source.indexOf(
+                        fragment,
+                        index
+                )) != -1
+        ) {
             count++;
             index += fragment.length();
         }

@@ -1,4 +1,3 @@
-
 package cr.ac.una.eif400.cyphail.compiler.codegen;
 
 import cr.ac.una.eif400.cyphail.ast.Query;
@@ -340,15 +339,17 @@ public final class PrologCodeGenerator {
             /**
              * Query lifecycle:
              *
-             * 1. Register generated clause.
-             * 2. Execute the clause.
-             * 3. Retrieve the tabular result.
-             * 4. Remove the temporary clause.
+             * 1. Register the generated temporary clause.
+             * 2. Execute the clause and obtain its tabular result.
+             * 3. Always erase the temporary clause after execution,
+             *    including on failure or an exception.
              *
-             * This preserves compatibility with
-             * the existing SWI-Prolog engine.
+             * setup_call_cleanup/3 is provided by SWI-Prolog.
+             * The outer findall/3 preserves the original MQI
+             * result format expected by the Java response handler.
              */
             return "findall(Rows, ("
+                    + "setup_call_cleanup("
                     + "cy_create_query(__QueryRef, "
                     + clause
                     + "), "
@@ -356,6 +357,7 @@ public final class PrologCodeGenerator {
                     + columnHeaders
                     + "], Rows), "
                     + "cy_erase_query(__QueryRef)"
+                    + ")"
                     + "), [Rows])";
         }
 

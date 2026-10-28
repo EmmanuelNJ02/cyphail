@@ -1,4 +1,3 @@
-
 package cr.ac.una.eif400.cyphail.compiler.codegen;
 
 import cr.ac.una.eif400.cyphail.ast.Query;
@@ -40,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * - Shared property lookup behavior.
  * - Standalone CREATE node generation.
  * - SET property update generation.
+ * - Guaranteed cleanup of temporary Prolog queries.
  * - Invalid variable references.
  *
  * Real SWI-Prolog and MQI execution is tested
@@ -942,6 +942,107 @@ class PrologCodeGeneratorTest {
                         "cy_erase_query"
                 )
         );
+    }
+
+    // =====================================================
+    // TEMPORARY QUERY CLEANUP - SPRINT P2 REGRESSION
+    // =====================================================
+
+    /**
+     * CodeGen must generate setup_call_cleanup/3 so that
+     * SWI-Prolog erases the temporary query clause even
+     * when cy_exec_query/3 throws an exception.
+     *
+     * This unit test checks generated syntax and goal order.
+     * The behavior under an actual Prolog exception must
+     * also be verified through an engine/MQI integration test.
+     */
+    @Test
+    void shouldGenerateExceptionSafeCleanupForMatchQuery() {
+
+        PrologGenerationResult result = generate(
+                "MATCH (a:Persona) RETURN a"
+        );
+
+        String goal = result.goal();
+
+        assertTrue(
+                goal.startsWith(
+                        "findall(Rows, (setup_call_cleanup("
+                ),
+                "Query creation, execution and cleanup must "
+                        + "be wrapped by setup_call_cleanup/3."
+        );
+
+        assertTrue(
+                goal.endsWith(
+                        "cy_erase_query(__QueryRef))), [Rows])"
+                ),
+                "Cleanup must be the third argument of "
+                        + "setup_call_cleanup/3."
+        );
+
+        int createIndex = goal.indexOf(
+                "cy_create_query(__QueryRef, "
+        );
+
+        int executeIndex = goal.indexOf(
+                "cy_exec_query(__QueryRef, ["
+        );
+
+        int eraseIndex = goal.indexOf(
+                "cy_erase_query(__QueryRef)"
+        );
+
+        assertTrue(createIndex >= 0);
+        assertTrue(executeIndex > createIndex);
+        assertTrue(eraseIndex > executeIndex);
+
+        assertEquals(1, occurrences(goal, "setup_call_cleanup("));
+        assertEquals(1, occurrences(goal, "cy_create_query("));
+        assertEquals(1, occurrences(goal, "cy_exec_query("));
+        assertEquals(1, occurrences(goal, "cy_erase_query("));
+
+        assertEquals(List.of("a"), result.columnHeaders());
+        assertEquals(Map.of("a", "__A"), result.variableMappings());
+    }
+
+    /**
+     * UPDATE statements without RETURN also require the
+     * same exception-safe cleanup while retaining the
+     * empty list of tabular output columns.
+     */
+    @Test
+    void shouldGenerateExceptionSafeCleanupForCreateWithoutReturn() {
+
+        PrologGenerationResult result = generate(
+                "CREATE (a:Persona {nombre: 'Marta'})"
+        );
+
+        String goal = result.goal();
+
+        assertTrue(
+                goal.startsWith(
+                        "findall(Rows, (setup_call_cleanup("
+                )
+        );
+
+        assertTrue(goal.contains("cy_create_node("));
+
+        assertTrue(
+                goal.contains(
+                        "cy_exec_query(__QueryRef, [], Rows)"
+                )
+        );
+
+        assertTrue(
+                goal.endsWith(
+                        "cy_erase_query(__QueryRef))), [Rows])"
+                )
+        );
+
+        assertEquals(List.of(), result.columnHeaders());
+        assertFalse(result.hasOutputColumns());
     }
 
     // =====================================================

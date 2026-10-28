@@ -1,4 +1,3 @@
-
 package cr.ac.una.eif400.cyphail.compiler.codegen;
 
 import cr.ac.una.eif400.cyphail.ast.Query;
@@ -36,12 +35,17 @@ import static org.junit.jupiter.api.Assertions.*;
  * - Standalone CREATE without RETURN.
  * - CREATE relationships and properties.
  * - MATCH followed by CREATE.
+ * - MATCH + CREATE between original graph nodes.
+ * - MATCH + CREATE without RETURN.
+ * - CREATE connecting original and stored nodes.
  * - Persistence across queries in one session.
  *
- * Each test starts a separate Prolog process.
+ * Every test starts an independent SWI-Prolog
+ * process through MqiBroker.
  *
  * Run explicitly with:
- * mvn -Dtest=PrologCreateMqiLiveIT test
+ *
+ * mvn "-Dtest=PrologCreateMqiLiveIT" test
  */
 class PrologCreateMqiLiveIT {
 
@@ -143,6 +147,10 @@ class PrologCreateMqiLiveIT {
         );
     }
 
+    // =====================================================
+    // TEST 1 - STANDALONE CREATE WITH RETURN
+    // =====================================================
+
     /**
      * Standalone CREATE must create a node,
      * return its identifier and preserve it
@@ -195,6 +203,10 @@ class PrologCreateMqiLiveIT {
         }
     }
 
+    // =====================================================
+    // TEST 2 - STANDALONE CREATE WITHOUT RETURN
+    // =====================================================
+
     /**
      * CREATE without RETURN must still execute
      * the mutation and persist the new node.
@@ -232,6 +244,10 @@ class PrologCreateMqiLiveIT {
             );
         }
     }
+
+    // =====================================================
+    // TEST 3 - CREATE RELATIONSHIP AND PROPERTIES
+    // =====================================================
 
     /**
      * CREATE must persist both endpoint nodes
@@ -296,6 +312,10 @@ class PrologCreateMqiLiveIT {
         }
     }
 
+    // =====================================================
+    // TEST 4 - MATCH FOLLOWED BY CREATE NODE
+    // =====================================================
+
     /**
      * A CREATE clause following MATCH must
      * reuse the matched node's property value.
@@ -349,6 +369,234 @@ class PrologCreateMqiLiveIT {
                     "titular anio\n'Juan Perez' 2026",
                     found,
                     "CREATE must reuse and persist MATCH properties."
+            );
+        }
+    }
+
+    // =====================================================
+    // TEST 5 - MATCH + CREATE BETWEEN ORIGINAL NODES
+    // =====================================================
+
+    /**
+     * Sprint P2 regression test.
+     *
+     * The original sample graph contains:
+     *
+     * id1: Juan Perez
+     * id2: Jorge Soto
+     *
+     * Both nodes are original Prolog facts,
+     * not entries in cyphail_graph_nodes.
+     *
+     * MATCH must identify the existing nodes.
+     * CREATE must connect them with a new edge.
+     *
+     * The generated edge must be available to
+     * a subsequent MATCH query in the same
+     * MQI session.
+     *
+     * This protects the cy_node_exists/2 fix
+     * implemented in graph_store.pl.
+     */
+    @Test
+    void shouldCreateRelationshipBetweenOriginalNodes()
+            throws Exception {
+
+        try (MqiBroker broker =
+                     MqiBroker.start(enginePath())) {
+
+            String created = run(
+                    broker,
+                    """
+                    MATCH (a:Person {
+                        name: 'Juan Perez'
+                    }),
+                    (b:Person {
+                        name: 'Jorge Soto'
+                    })
+                    CREATE (a)-[r:P2_ORIGINAL_CREATE]->(b)
+                    RETURN a, r, b
+                    """
+            );
+
+            assertTrue(
+                    created.startsWith(
+                            "a r b\nid1 cy_edge_"
+                    ),
+                    "CREATE must connect original nodes "
+                            + "without creating duplicate nodes."
+            );
+
+            assertTrue(
+                    created.endsWith(" id2"),
+                    "The destination must remain original node id2."
+            );
+
+            String found = run(
+                    broker,
+                    """
+                    MATCH (a:Person {
+                        name: 'Juan Perez'
+                    })
+                    -[r:P2_ORIGINAL_CREATE]->
+                    (b:Person {
+                        name: 'Jorge Soto'
+                    })
+                    RETURN a, r, b
+                    """
+            );
+
+            assertEquals(
+                    created,
+                    found,
+                    "MATCH must recover the newly created "
+                            + "relationship with the same "
+                            + "original endpoint identifiers."
+            );
+        }
+    }
+
+    // =====================================================
+    // TEST 6 - MATCH + CREATE WITHOUT RETURN
+    // =====================================================
+
+    /**
+     * Sprint P2 regression test.
+     *
+     * The SPEC includes MATCH followed by
+     * CREATE without a RETURN clause.
+     *
+     * The relationship must be created
+     * even when the original statement
+     * does not request output columns.
+     *
+     * A later MATCH verifies persistence.
+     */
+    @Test
+    void shouldCreateRelationshipFromMatchWithoutReturn()
+            throws Exception {
+
+        try (MqiBroker broker =
+                     MqiBroker.start(enginePath())) {
+
+            run(
+                    broker,
+                    """
+                    MATCH (a:Person {
+                        name: 'Juan Perez'
+                    }),
+                    (b:Person {
+                        name: 'Jorge Soto'
+                    })
+                    CREATE (a)-[:P2_ORIGINAL_NO_RETURN]->(b)
+                    """
+            );
+
+            String found = run(
+                    broker,
+                    """
+                    MATCH (a:Person {
+                        name: 'Juan Perez'
+                    })
+                    -[r:P2_ORIGINAL_NO_RETURN]->
+                    (b:Person {
+                        name: 'Jorge Soto'
+                    })
+                    RETURN a, r, b
+                    """
+            );
+
+            assertTrue(
+                    found.startsWith(
+                            "a r b\nid1 cy_edge_"
+                    ),
+                    "CREATE without RETURN must persist "
+                            + "the relationship between "
+                            + "the original graph nodes."
+            );
+
+            assertTrue(
+                    found.endsWith(" id2"),
+                    "The newly created relationship "
+                            + "must preserve its endpoints."
+            );
+        }
+    }
+
+    // =====================================================
+    // TEST 7 - ORIGINAL NODE TO NEWLY CREATED NODE
+    // =====================================================
+
+    /**
+     * Sprint P2 regression test.
+     *
+     * Verifies CREATE with mixed node storage:
+     *
+     * - The source node is an original
+     *   fact defined in engine.pl.
+     *
+     * - The destination node is created
+     *   in the recorded graph database.
+     *
+     * The relationship must connect
+     * both types of nodes correctly.
+     *
+     * A subsequent MATCH must recover
+     * the relationship and both endpoints.
+     */
+    @Test
+    void shouldCreateRelationshipBetweenOriginalAndNewNode()
+            throws Exception {
+
+        try (MqiBroker broker =
+                     MqiBroker.start(enginePath())) {
+
+            String created = run(
+                    broker,
+                    """
+                    MATCH (a:Person {
+                        name: 'Juan Perez'
+                    })
+                    CREATE (a)-[r:P2_MIXED_CREATE]->
+                           (b:Person {
+                               name: 'P2_Mixed_Destination'
+                           })
+                    RETURN a, r, b
+                    """
+            );
+
+            assertTrue(
+                    created.startsWith(
+                            "a r b\nid1 cy_edge_"
+                    ),
+                    "The source must be original node id1."
+            );
+
+            assertTrue(
+                    created.contains("cy_node_"),
+                    "The destination must be a newly created node."
+            );
+
+            String found = run(
+                    broker,
+                    """
+                    MATCH (a:Person {
+                        name: 'Juan Perez'
+                    })
+                    -[r:P2_MIXED_CREATE]->
+                    (b:Person {
+                        name: 'P2_Mixed_Destination'
+                    })
+                    RETURN a, r, b
+                    """
+            );
+
+            assertEquals(
+                    created,
+                    found,
+                    "The mixed relationship must remain "
+                            + "queryable with the same "
+                            + "node and edge identifiers."
             );
         }
     }

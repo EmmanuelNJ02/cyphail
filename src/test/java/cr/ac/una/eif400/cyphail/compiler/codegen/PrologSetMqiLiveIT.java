@@ -23,10 +23,10 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * Authors:
  * Emmanuel Nunez Jimenez
- * Julissa Solano Valverde
  * Valery Alfaro Morales
  * Roy Arias Mejia
  * Keynell Molina Mora
+ * Julissa Solano Valverde
  *
  * Real SWI-Prolog and MQI integration tests for SET.
  *
@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * - SET using a property from a MATCH variable.
  * - SET without RETURN.
  * - SET on original sample graph nodes.
+ * - SET on original sample graph relationships.
  * - Persistence across queries in one MQI session.
  *
  * Every test uses an independent SWI-Prolog process.
@@ -475,9 +476,8 @@ class PrologSetMqiLiveIT {
      *
      * Juan Perez has age 31.
      *
-     * This test must remain active until
-     * the Prolog engine supports mutation
-     * of original graph nodes.
+     * This regression test protects support
+     * for mutations of original graph nodes.
      */
     @Test
     void shouldUpdateOriginalSampleGraphNode()
@@ -517,6 +517,97 @@ class PrologSetMqiLiveIT {
                     "a.age\n31",
                     found,
                     "The original node must retain its update."
+            );
+        }
+    }
+
+    // =====================================================
+    // TEST 7 - UPDATE ORIGINAL SAMPLE GRAPH RELATIONSHIP
+    // =====================================================
+
+    /**
+     * Verifies SET on an original relationship from engine.pl.
+     *
+     * The original sample graph contains an Amigo relationship
+     * e1 between Juan Perez (id1) and Jorge Soto (id2).
+     * Unlike CREATE relationships, e1 is not stored in the
+     * SWI-Prolog recorded database.
+     *
+     * The test verifies creation of a property, persistence
+     * across queries, replacement of its value and that
+     * the original relationship keeps its identifier.
+     */
+    @Test
+    void shouldSetAndReplacePropertyOnOriginalSampleRelationship()
+            throws Exception {
+
+        try (MqiBroker broker =
+                     MqiBroker.start(enginePath())) {
+
+            String updated = run(
+                    broker,
+                    """
+                    MATCH (a:Person {name: 'Juan Perez'})
+                          -[r:Amigo]->
+                          (b:Person {name: 'Jorge Soto'})
+                    SET r.since = 2020
+                    RETURN r, r.since
+                    """
+            );
+
+            assertEquals(
+                    "r r.since\ne1 2020",
+                    updated,
+                    "SET must support original sample relationships."
+            );
+
+            String found = run(
+                    broker,
+                    """
+                    MATCH (a:Person {name: 'Juan Perez'})
+                          -[r:Amigo]->
+                          (b:Person {name: 'Jorge Soto'})
+                    RETURN r, r.since
+                    """
+            );
+
+            assertEquals(
+                    "r r.since\ne1 2020",
+                    found,
+                    "The new edge property must persist across queries."
+            );
+
+            String replaced = run(
+                    broker,
+                    """
+                    MATCH (a:Person {name: 'Juan Perez'})
+                          -[r:Amigo]->
+                          (b:Person {name: 'Jorge Soto'})
+                    SET r.since = 2024
+                    RETURN r, r.since
+                    """
+            );
+
+            assertEquals(
+                    "r r.since\ne1 2024",
+                    replaced,
+                    "SET must replace the existing edge property."
+            );
+
+            String foundAgain = run(
+                    broker,
+                    """
+                    MATCH (a:Person {name: 'Juan Perez'})
+                          -[r:Amigo]->
+                          (b:Person {name: 'Jorge Soto'})
+                    RETURN r, r.since
+                    """
+            );
+
+            assertEquals(
+                    "r r.since\ne1 2024",
+                    foundAgain,
+                    "The original edge must retain the new value and ID."
             );
         }
     }
