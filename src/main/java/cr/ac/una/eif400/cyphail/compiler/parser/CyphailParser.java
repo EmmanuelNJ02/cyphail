@@ -1,43 +1,12 @@
+
 package cr.ac.una.eif400.cyphail.compiler.parser;
 
 import cr.ac.una.eif400.cyphail.ast.Query;
-import cr.ac.una.eif400.cyphail.ast.clause.CreateClause;
-import cr.ac.una.eif400.cyphail.ast.clause.DeleteClause;
-import cr.ac.una.eif400.cyphail.ast.clause.MatchClause;
-import cr.ac.una.eif400.cyphail.ast.clause.Projection;
-import cr.ac.una.eif400.cyphail.ast.clause.ProjectionItem;
-import cr.ac.una.eif400.cyphail.ast.clause.ProjectionModifiers;
-import cr.ac.una.eif400.cyphail.ast.clause.RemoveClause;
-import cr.ac.una.eif400.cyphail.ast.clause.ReturnClause;
-import cr.ac.una.eif400.cyphail.ast.clause.SetClause;
-import cr.ac.una.eif400.cyphail.ast.clause.SetProperty;
-import cr.ac.una.eif400.cyphail.ast.clause.SortDirection;
-import cr.ac.una.eif400.cyphail.ast.clause.SortItem;
-import cr.ac.una.eif400.cyphail.ast.clause.UpdatingClause;
-import cr.ac.una.eif400.cyphail.ast.clause.WhereClause;
-import cr.ac.una.eif400.cyphail.ast.expression.BinaryExpression;
-import cr.ac.una.eif400.cyphail.ast.expression.BinaryOperator;
-import cr.ac.una.eif400.cyphail.ast.expression.BooleanLiteralExpression;
-import cr.ac.una.eif400.cyphail.ast.expression.Expression;
-import cr.ac.una.eif400.cyphail.ast.expression.FloatLiteralExpression;
-import cr.ac.una.eif400.cyphail.ast.expression.IntegerLiteralExpression;
-import cr.ac.una.eif400.cyphail.ast.expression.NullLiteralExpression;
-import cr.ac.una.eif400.cyphail.ast.expression.PropertyExpression;
-import cr.ac.una.eif400.cyphail.ast.expression.StringLiteralExpression;
-import cr.ac.una.eif400.cyphail.ast.expression.VariableExpression;
-import cr.ac.una.eif400.cyphail.ast.pattern.NodePattern;
-import cr.ac.una.eif400.cyphail.ast.pattern.Pattern;
-import cr.ac.una.eif400.cyphail.ast.pattern.PatternPath;
-import cr.ac.una.eif400.cyphail.ast.pattern.PatternProperty;
-import cr.ac.una.eif400.cyphail.compiler.lexer.CyphailLexer;
-import cr.ac.una.eif400.cyphail.compiler.lexer.Token;
-import cr.ac.una.eif400.cyphail.compiler.lexer.TokenType;
-import cr.ac.una.eif400.cyphail.compiler.parser.combinator.ParseFailure;
-import cr.ac.una.eif400.cyphail.compiler.parser.combinator.ParseResult;
-import cr.ac.una.eif400.cyphail.compiler.parser.combinator.ParseSuccess;
-import cr.ac.una.eif400.cyphail.compiler.parser.combinator.Parser;
-import cr.ac.una.eif400.cyphail.compiler.parser.combinator.ParserInput;
-import cr.ac.una.eif400.cyphail.compiler.parser.combinator.Parsers;
+import cr.ac.una.eif400.cyphail.ast.clause.*;
+import cr.ac.una.eif400.cyphail.ast.expression.*;
+import cr.ac.una.eif400.cyphail.ast.pattern.*;
+import cr.ac.una.eif400.cyphail.compiler.lexer.*;
+import cr.ac.una.eif400.cyphail.compiler.parser.combinator.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,54 +14,40 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Concrete functional parser for the Cyphail language.
+ * Project: Cyphail - Sprint P2
+ * Course: EIF400 - Paradigmas de Programacion
+ * Universidad Nacional de Costa Rica
+ * Escuela de Informatica
+ * Group Code: 04-10am
  *
- * <p>The parser consumes the immutable token stream produced by
- * CyphailLexer and builds the Cyphail AST through functional
- * parser combinators.</p>
+ * Authors:
+ * Emmanuel Nunez Jimenez
+ * Julissa Solano Valverde
+ * Valery Alfaro Morales
+ * Keynell Molina Mora
+ * Roy Arias Mejia
  *
- * <p>Sprint P1 supports node patterns, node properties, WHERE
- * comparisons, CREATE, DELETE and RETURN projections.</p>
+ * Functional Cyphail parser.
  *
- * <p>Sprint P2 extends pattern parsing to support relationship
- * paths, relationship properties and the directions IN, OUT
- * and NONE. The original Sprint P1 parsing behavior is preserved.</p>
+ * Supports:
+ * - MATCH and relationship patterns.
+ * - WHERE with comparisons, AND and OR.
+ * - Parenthesized expressions.
+ * - Standalone CREATE.
+ * - SET with one or more property assignments.
+ * - REMOVE and DELETE.
+ * - RETURN projections and modifiers.
  *
- * <p>Sprint P2 also supports decimal literals, standalone
- * CREATE statements without a preceding MATCH clause,
- * SET assignments and REMOVE property clauses.</p>
- *
- * <p>Project: Cyphail - Sprint P2</p>
- * <p>Course: EIF400 - Paradigmas de Programacion</p>
- * <p>Universidad Nacional de Costa Rica</p>
- * <p>Escuela de Informatica</p>
- * <p>Group Code: 04-10am</p>
- *
- * <p>Authors:</p>
- * <ul>
- *     <li>Emmanuel Nunez Jimenez</li>
- *     <li>Valery Alfaro Morales</li>
- *     <li>Roy Arias Mejia</li>
- *     <li>Keynell Molina Mora</li>
- *     <li>Julissa Solano Valverde</li>
- * </ul>
+ * Preserves existing P1/P2 parser behavior.
  */
 public final class CyphailParser {
 
     private final CyphailLexer lexer;
 
-    /**
-     * Creates a parser using the standard Cyphail lexer.
-     */
     public CyphailParser() {
         this(new CyphailLexer());
     }
 
-    /**
-     * Creates a parser with the supplied lexer.
-     *
-     * @param lexer lexer used to tokenize source queries
-     */
     public CyphailParser(CyphailLexer lexer) {
         this.lexer = Objects.requireNonNull(
                 lexer,
@@ -100,39 +55,30 @@ public final class CyphailParser {
         );
     }
 
-    /**
-     * Parses Cyphail source text and returns a functional parse result.
-     *
-     * @param source Cyphail query
-     * @return parse result containing the Query AST or a failure
-     */
     public ParseResult<Query> parse(String source) {
+
         Objects.requireNonNull(
                 source,
                 "Source cannot be null"
         );
 
         List<Token> tokens = lexer.tokenize(source);
-        ParserInput input = ParserInput.from(tokens);
 
-        return queryParser().parse(input);
+        return queryParser().parse(
+                ParserInput.from(tokens)
+        );
     }
 
-    /**
-     * Parses a query and returns its AST.
-     *
-     * @param source Cyphail query
-     * @return parsed Query AST
-     * @throws IllegalArgumentException when parsing fails
-     */
     public Query parseOrThrow(String source) {
+
         ParseResult<Query> result = parse(source);
 
         if (result instanceof ParseSuccess<?> success) {
             return (Query) success.value();
         }
 
-        ParseFailure<?> failure = (ParseFailure<?>) result;
+        ParseFailure<?> failure =
+                (ParseFailure<?>) result;
 
         throw new IllegalArgumentException(
                 failure.reason()
@@ -141,84 +87,45 @@ public final class CyphailParser {
         );
     }
 
-    /**
-     * Selects the query grammar based on the first token.
-     *
-     * <p>Queries starting with CREATE use the Sprint P2
-     * standalone CREATE parser. All other queries follow
-     * the original MATCH-first parser.</p>
-     *
-     * <p>This avoids hiding a syntax error inside a malformed
-     * MATCH query by attempting an unrelated CREATE parser.</p>
-     *
-     * @return parser for a complete query
-     */
-    private Parser<Query> queryParser() {
-        return input -> {
-            if (input.current().type() == TokenType.CREATE) {
-                return createStartingQueryParser().parse(input);
-            }
+    // =====================================================
+    // QUERY PARSING
+    // =====================================================
 
-            return matchStartingQueryParser().parse(input);
-        };
+    private Parser<Query> queryParser() {
+
+        return input ->
+                input.current().type() == TokenType.CREATE
+                        ? createStartingQueryParser().parse(input)
+                        : matchStartingQueryParser().parse(input);
     }
 
-    /**
-     * Parses queries that begin with MATCH.
-     *
-     * <p>Preserves the original Sprint P1 syntax, including
-     * optional WHERE, updating clauses and RETURN.</p>
-     *
-     * @return parser for MATCH-first queries
-     */
     private Parser<Query> matchStartingQueryParser() {
-        return matchClauseParser().flatMap(
-                match -> Parsers.optional(
-                        whereClauseParser()
-                ).flatMap(
-                        where -> Parsers.many(
-                                updatingClauseParser()
-                        ).flatMap(
-                                updates -> Parsers.optional(
-                                        returnClauseParser()
-                                ).flatMap(
-                                        returnClause ->
-                                                Parsers.token(
-                                                        TokenType.EOF
-                                                ).map(
-                                                        eof -> new Query(
-                                                                match,
-                                                                where,
-                                                                updates,
-                                                                returnClause
-                                                        )
+
+        return matchClauseParser().flatMap(match ->
+                Parsers.optional(whereClauseParser()).flatMap(where ->
+                        Parsers.many(updatingClauseParser()).flatMap(updates ->
+                                Parsers.optional(returnClauseParser()).flatMap(returnClause ->
+                                        Parsers.token(TokenType.EOF).map(eof ->
+                                                new Query(
+                                                        match,
+                                                        where,
+                                                        updates,
+                                                        returnClause
                                                 )
+                                        )
                                 )
                         )
                 )
         );
     }
 
-    /**
-     * Parses standalone CREATE queries without MATCH.
-     *
-     * <p>The first CREATE is mandatory. Additional update
-     * clauses and an optional RETURN may follow it.</p>
-     *
-     * @return parser for CREATE-first queries
-     */
     private Parser<Query> createStartingQueryParser() {
-        return createClauseParser().flatMap(
-                firstCreate -> Parsers.many(
-                        updatingClauseParser()
-                ).flatMap(
-                        followingUpdates -> Parsers.optional(
-                                returnClauseParser()
-                        ).flatMap(
-                                returnClause -> Parsers.token(
-                                        TokenType.EOF
-                                ).map(
-                                        eof -> new Query(
+
+        return createClauseParser().flatMap(firstCreate ->
+                Parsers.many(updatingClauseParser()).flatMap(followingUpdates ->
+                        Parsers.optional(returnClauseParser()).flatMap(returnClause ->
+                                Parsers.token(TokenType.EOF).map(eof ->
+                                        new Query(
                                                 null,
                                                 Optional.empty(),
                                                 prepend(
@@ -233,50 +140,37 @@ public final class CyphailParser {
         );
     }
 
+    // =====================================================
+    // CLAUSE PARSING
+    // =====================================================
+
     private Parser<MatchClause> matchClauseParser() {
-        return Parsers.token(TokenType.MATCH)
-                .flatMap(
-                        match -> patternParser()
-                                .map(MatchClause::new)
-                );
+
+        return Parsers.token(TokenType.MATCH).flatMap(token ->
+                patternParser().map(MatchClause::new)
+        );
     }
 
     private Parser<WhereClause> whereClauseParser() {
-        return Parsers.token(TokenType.WHERE)
-                .flatMap(
-                        where -> expressionParser()
-                                .map(WhereClause::new)
-                );
+
+        return Parsers.token(TokenType.WHERE).flatMap(token ->
+                expressionParser().map(WhereClause::new)
+        );
     }
 
-    /**
-     * Parses supported updating clauses.
-     *
-     * <p>Sprint P2 adds SET and REMOVE while preserving
-     * CREATE and DELETE.</p>
-     *
-     * @return parser for an updating clause
-     */
     private Parser<UpdatingClause> updatingClauseParser() {
+
         Parser<UpdatingClause> create =
-                createClauseParser().map(
-                        clause -> clause
-                );
+                createClauseParser().map(clause -> clause);
 
         Parser<UpdatingClause> set =
-                setClauseParser().map(
-                        clause -> clause
-                );
+                setClauseParser().map(clause -> clause);
 
         Parser<UpdatingClause> remove =
-                removeClauseParser().map(
-                        clause -> clause
-                );
+                removeClauseParser().map(clause -> clause);
 
         Parser<UpdatingClause> delete =
-                deleteClauseParser().map(
-                        clause -> clause
-                );
+                deleteClauseParser().map(clause -> clause);
 
         return Parsers.or(
                 create,
@@ -287,50 +181,76 @@ public final class CyphailParser {
         );
     }
 
+    // =====================================================
+    // CREATE
+    // =====================================================
+
     private Parser<CreateClause> createClauseParser() {
-        return Parsers.token(TokenType.CREATE)
-                .flatMap(
-                        create -> patternParser()
-                                .map(CreateClause::new)
-                );
+
+        return Parsers.token(TokenType.CREATE).flatMap(token ->
+                patternParser().map(CreateClause::new)
+        );
+    }
+
+    // =====================================================
+    // SET
+    // =====================================================
+
+    /**
+     * Parses single and multiple SET assignments.
+     *
+     * Examples:
+     *
+     * SET p.precio = 19.99
+     *
+     * SET p.precio = 19.99,
+     *     p.estado = 'activo'
+     *
+     * SET r.grade = 9.5
+     *
+     * The source order of assignments is preserved.
+     */
+    private Parser<SetClause> setClauseParser() {
+
+        return Parsers.token(TokenType.SET).flatMap(token ->
+                setPropertyParser().flatMap(first ->
+                        Parsers.many(
+                                commaThenSetPropertyParser()
+                        ).map(rest ->
+                                new SetClause(
+                                        new ArrayList<SetItem>(
+                                                prepend(first, rest)
+                                        )
+                                )
+                        )
+                )
+        );
     }
 
     /**
-     * Parses a SET assignment for a node or relationship property.
+     * Parses one SET property assignment.
      *
-     * <p>Examples:</p>
-     * <pre>
-     * SET p.precio = 19.99
-     * SET r.grade = 9.5
-     * </pre>
+     * Grammar:
      *
-     * <p>The AST stores the assignment as a SetProperty
-     * inside the original SetClause items collection.</p>
+     * identifier "." identifier "=" expression
      *
-     * @return parser for a SET clause
+     * Produces a SetProperty AST node.
      */
-    private Parser<SetClause> setClauseParser() {
-        return Parsers.token(TokenType.SET).flatMap(
-                set -> identifierNameParser().flatMap(
-                        variable -> Parsers.token(
-                                TokenType.DOT
-                        ).flatMap(
-                                dot -> identifierNameParser().flatMap(
-                                        property -> Parsers.token(
-                                                TokenType.EQUAL
-                                        ).flatMap(
-                                                equal -> expressionParser().map(
-                                                        value -> new SetClause(
-                                                                List.of(
-                                                                        new SetProperty(
-                                                                                new PropertyExpression(
-                                                                                        new VariableExpression(variable),
-                                                                                        property
-                                                                                ),
-                                                                                value
-                                                                        )
-                                                                )
-                                                        )
+    private Parser<SetProperty> setPropertyParser() {
+
+        return identifierNameParser().flatMap(variable ->
+                Parsers.token(TokenType.DOT).flatMap(dot ->
+                        identifierNameParser().flatMap(property ->
+                                Parsers.token(TokenType.EQUAL).flatMap(equal ->
+                                        expressionParser().map(value ->
+                                                new SetProperty(
+                                                        new PropertyExpression(
+                                                                new VariableExpression(
+                                                                        variable
+                                                                ),
+                                                                property
+                                                        ),
+                                                        value
                                                 )
                                         )
                                 )
@@ -340,25 +260,28 @@ public final class CyphailParser {
     }
 
     /**
-     * Parses a REMOVE clause containing one or more
-     * property references.
-     *
-     * <p>Examples:</p>
-     * <pre>
-     * REMOVE p.discount
-     * REMOVE r.grade
-     * REMOVE p.discount, p.oldPrice
-     * </pre>
-     *
-     * @return parser for a REMOVE clause
+     * Parses an additional SET item
+     * preceded by a comma.
      */
+    private Parser<SetProperty> commaThenSetPropertyParser() {
+
+        return Parsers.token(TokenType.COMMA).flatMap(token ->
+                setPropertyParser()
+        );
+    }
+
+    // =====================================================
+    // REMOVE
+    // =====================================================
+
     private Parser<RemoveClause> removeClauseParser() {
-        return Parsers.token(TokenType.REMOVE).flatMap(
-                remove -> removePropertyParser().flatMap(
-                        first -> Parsers.many(
+
+        return Parsers.token(TokenType.REMOVE).flatMap(token ->
+                removePropertyParser().flatMap(first ->
+                        Parsers.many(
                                 commaThenRemovePropertyParser()
-                        ).map(
-                                rest -> new RemoveClause(
+                        ).map(rest ->
+                                new RemoveClause(
                                         prepend(first, rest)
                                 )
                         )
@@ -366,21 +289,12 @@ public final class CyphailParser {
         );
     }
 
-    /**
-     * Parses a property reference used by REMOVE.
-     *
-     * <p>The property may belong to a node or
-     * relationship variable.</p>
-     *
-     * @return parser for a property expression
-     */
     private Parser<PropertyExpression> removePropertyParser() {
-        return identifierNameParser().flatMap(
-                variable -> Parsers.token(
-                        TokenType.DOT
-                ).flatMap(
-                        dot -> identifierNameParser().map(
-                                property -> new PropertyExpression(
+
+        return identifierNameParser().flatMap(variable ->
+                Parsers.token(TokenType.DOT).flatMap(dot ->
+                        identifierNameParser().map(property ->
+                                new PropertyExpression(
                                         new VariableExpression(variable),
                                         property
                                 )
@@ -389,80 +303,63 @@ public final class CyphailParser {
         );
     }
 
-    /**
-     * Parses a comma followed by another REMOVE property.
-     *
-     * @return parser for another property expression
-     */
-    private Parser<PropertyExpression>
-    commaThenRemovePropertyParser() {
-        return Parsers.token(TokenType.COMMA).flatMap(
-                comma -> removePropertyParser()
+    private Parser<PropertyExpression> commaThenRemovePropertyParser() {
+
+        return Parsers.token(TokenType.COMMA).flatMap(token ->
+                removePropertyParser()
         );
     }
 
+    // =====================================================
+    // DELETE
+    // =====================================================
+
     private Parser<DeleteClause> deleteClauseParser() {
+
         return Parsers.optional(
                 Parsers.token(TokenType.DETACH)
-        ).flatMap(
-                detach -> Parsers.token(
-                        TokenType.DELETE
-                ).flatMap(
-                        delete -> expressionParser()
-                                .flatMap(
-                                        first -> Parsers.many(
-                                                commaThenExpressionParser()
-                                        ).map(
-                                                rest -> new DeleteClause(
-                                                        detach.isPresent(),
-                                                        prepend(
-                                                                first,
-                                                                rest
-                                                        )
-                                                )
+        ).flatMap(detach ->
+                Parsers.token(TokenType.DELETE).flatMap(token ->
+                        expressionParser().flatMap(first ->
+                                Parsers.many(
+                                        commaThenExpressionParser()
+                                ).map(rest ->
+                                        new DeleteClause(
+                                                detach.isPresent(),
+                                                prepend(first, rest)
                                         )
                                 )
+                        )
                 )
         );
     }
 
     private Parser<Expression> commaThenExpressionParser() {
-        return Parsers.token(TokenType.COMMA)
-                .flatMap(
-                        comma -> expressionParser()
-                );
+
+        return Parsers.token(TokenType.COMMA).flatMap(token ->
+                expressionParser()
+        );
     }
 
-    /**
-     * Parses one or more comma-separated pattern paths.
-     *
-     * <p>Sprint P1 node-only patterns are represented as
-     * isolated paths. Sprint P2 relationship patterns retain
-     * their ordered relationship steps.</p>
-     *
-     * @return parser for a complete pattern
-     */
+    // =====================================================
+    // PATTERNS AND RELATIONSHIPS
+    // =====================================================
+
     private Parser<Pattern> patternParser() {
-        return patternPathParser().flatMap(
-                first -> Parsers.many(
+
+        return patternPathParser().flatMap(first ->
+                Parsers.many(
                         commaThenPatternPathParser()
-                ).map(
-                        rest -> Pattern.fromPaths(
+                ).map(rest ->
+                        Pattern.fromPaths(
                                 prepend(first, rest)
                         )
                 )
         );
     }
 
-    /**
-     * Parses a node followed by zero or more relationship steps.
-     *
-     * <p>Existing node, identifier, label and property parsers
-     * are reused to preserve the functional design.</p>
-     *
-     * @return parser for a pattern path
-     */
     private Parser<PatternPath> patternPathParser() {
+
         return PatternPathParser.path(
                 nodePatternParser(),
                 identifierNameParser(),
@@ -471,44 +368,28 @@ public final class CyphailParser {
         );
     }
 
-    /**
-     * Parses a comma followed by another pattern path.
-     *
-     * @return parser for a comma-separated pattern path
-     */
     private Parser<PatternPath> commaThenPatternPathParser() {
-        return Parsers.token(TokenType.COMMA)
-                .flatMap(
-                        comma -> patternPathParser()
-                );
+
+        return Parsers.token(TokenType.COMMA).flatMap(token ->
+                patternPathParser()
+        );
     }
 
     private Parser<NodePattern> nodePatternParser() {
-        return Parsers.token(
-                TokenType.LEFT_PAREN
-        ).flatMap(
-                leftParen -> Parsers.optional(
-                        identifierNameParser()
-                ).flatMap(
-                        variable -> Parsers.many(
-                                labelParser()
-                        ).flatMap(
-                                labels -> Parsers.optional(
-                                        nodePropertiesParser()
-                                ).flatMap(
-                                        properties ->
-                                                Parsers.token(
-                                                        TokenType.RIGHT_PAREN
-                                                ).map(
-                                                        rightParen ->
-                                                                new NodePattern(
-                                                                        variable,
-                                                                        labels,
-                                                                        properties.orElse(
-                                                                                List.of()
-                                                                        )
-                                                                )
+
+        return Parsers.token(TokenType.LEFT_PAREN).flatMap(leftParen ->
+                Parsers.optional(identifierNameParser()).flatMap(variable ->
+                        Parsers.many(labelParser()).flatMap(labels ->
+                                Parsers.optional(nodePropertiesParser()).flatMap(properties ->
+                                        Parsers.token(TokenType.RIGHT_PAREN).map(rightParen ->
+                                                new NodePattern(
+                                                        variable,
+                                                        labels,
+                                                        properties.orElse(
+                                                                List.of()
+                                                        )
                                                 )
+                                        )
                                 )
                         )
                 )
@@ -516,85 +397,81 @@ public final class CyphailParser {
     }
 
     private Parser<String> labelParser() {
-        return Parsers.token(TokenType.COLON)
-                .flatMap(
-                        colon -> identifierNameParser()
-                );
+
+        return Parsers.token(TokenType.COLON).flatMap(token ->
+                identifierNameParser()
+        );
     }
 
+    // =====================================================
+    // PATTERN PROPERTIES
+    // =====================================================
+
     private Parser<List<PatternProperty>> nodePropertiesParser() {
-        return Parsers.token(
-                TokenType.LEFT_BRACE
-        ).flatMap(
-                leftBrace -> Parsers.optional(
-                        propertyListParser()
-                ).flatMap(
-                        properties -> Parsers.token(
-                                TokenType.RIGHT_BRACE
-                        ).map(
-                                rightBrace -> properties.orElse(
-                                        List.of()
-                                )
+
+        return Parsers.token(TokenType.LEFT_BRACE).flatMap(leftBrace ->
+                Parsers.optional(propertyListParser()).flatMap(properties ->
+                        Parsers.token(TokenType.RIGHT_BRACE).map(rightBrace ->
+                                properties.orElse(List.of())
                         )
                 )
         );
     }
 
     private Parser<List<PatternProperty>> propertyListParser() {
-        return patternPropertyParser().flatMap(
-                first -> Parsers.many(
+
+        return patternPropertyParser().flatMap(first ->
+                Parsers.many(
                         commaThenPatternPropertyParser()
-                ).map(
-                        rest -> prepend(first, rest)
+                ).map(rest ->
+                        prepend(first, rest)
                 )
         );
     }
 
-    private Parser<PatternProperty>
-    commaThenPatternPropertyParser() {
-        return Parsers.token(TokenType.COMMA)
-                .flatMap(
-                        comma -> patternPropertyParser()
-                );
+    private Parser<PatternProperty> commaThenPatternPropertyParser() {
+
+        return Parsers.token(TokenType.COMMA).flatMap(token ->
+                patternPropertyParser()
+        );
     }
 
     private Parser<PatternProperty> patternPropertyParser() {
-        return identifierNameParser().flatMap(
-                name -> Parsers.token(
-                        TokenType.COLON
-                ).flatMap(
-                        colon -> expressionParser()
-                                .map(
-                                        value -> new PatternProperty(
-                                                name,
-                                                value
-                                        )
+
+        return identifierNameParser().flatMap(name ->
+                Parsers.token(TokenType.COLON).flatMap(token ->
+                        expressionParser().map(value ->
+                                new PatternProperty(
+                                        name,
+                                        value
                                 )
+                        )
                 )
         );
     }
 
+    // =====================================================
+    // RETURN
+    // =====================================================
+
     private Parser<ReturnClause> returnClauseParser() {
-        return Parsers.token(TokenType.RETURN)
-                .flatMap(
-                        returnToken -> Parsers.optional(
-                                Parsers.token(
-                                        TokenType.DISTINCT
+
+        return Parsers.token(TokenType.RETURN).flatMap(token ->
+                Parsers.optional(
+                        Parsers.token(TokenType.DISTINCT)
+                ).flatMap(distinct ->
+                        projectionParser().map(projection ->
+                                new ReturnClause(
+                                        distinct.isPresent(),
+                                        projection
                                 )
-                        ).flatMap(
-                                distinct -> projectionParser()
-                                        .map(
-                                                projection ->
-                                                        new ReturnClause(
-                                                                distinct.isPresent(),
-                                                                projection
-                                                        )
-                                        )
                         )
-                );
+                )
+        );
     }
 
     private Parser<Projection> projectionParser() {
+
         return Parsers.or(
                 wildcardProjectionParser(),
                 explicitProjectionParser()
@@ -602,59 +479,51 @@ public final class CyphailParser {
     }
 
     private Parser<Projection> wildcardProjectionParser() {
-        return Parsers.token(TokenType.STAR)
-                .flatMap(
-                        star -> Parsers.many(
-                                commaThenProjectionItemParser()
-                        ).flatMap(
-                                items -> projectionModifiersParser()
-                                        .map(
-                                                modifiers ->
-                                                        new Projection(
-                                                                true,
-                                                                items,
-                                                                modifiers
-                                                        )
-                                        )
-                        )
-                );
-    }
 
-    private Parser<Projection> explicitProjectionParser() {
-        return projectionItemParser().flatMap(
-                first -> Parsers.many(
+        return Parsers.token(TokenType.STAR).flatMap(token ->
+                Parsers.many(
                         commaThenProjectionItemParser()
-                ).flatMap(
-                        rest -> projectionModifiersParser()
-                                .map(
-                                        modifiers ->
-                                                new Projection(
-                                                        false,
-                                                        prepend(
-                                                                first,
-                                                                rest
-                                                        ),
-                                                        modifiers
-                                                )
+                ).flatMap(items ->
+                        projectionModifiersParser().map(modifiers ->
+                                new Projection(
+                                        true,
+                                        items,
+                                        modifiers
                                 )
+                        )
                 )
         );
     }
 
-    private Parser<ProjectionItem>
-    commaThenProjectionItemParser() {
-        return Parsers.token(TokenType.COMMA)
-                .flatMap(
-                        comma -> projectionItemParser()
-                );
+    private Parser<Projection> explicitProjectionParser() {
+
+        return projectionItemParser().flatMap(first ->
+                Parsers.many(
+                        commaThenProjectionItemParser()
+                ).flatMap(rest ->
+                        projectionModifiersParser().map(modifiers ->
+                                new Projection(
+                                        false,
+                                        prepend(first, rest),
+                                        modifiers
+                                )
+                        )
+                )
+        );
+    }
+
+    private Parser<ProjectionItem> commaThenProjectionItemParser() {
+
+        return Parsers.token(TokenType.COMMA).flatMap(token ->
+                projectionItemParser()
+        );
     }
 
     private Parser<ProjectionItem> projectionItemParser() {
-        return expressionParser().flatMap(
-                expression -> Parsers.optional(
-                        aliasParser()
-                ).map(
-                        alias -> new ProjectionItem(
+
+        return expressionParser().flatMap(expression ->
+                Parsers.optional(aliasParser()).map(alias ->
+                        new ProjectionItem(
                                 expression,
                                 alias
                         )
@@ -663,27 +532,23 @@ public final class CyphailParser {
     }
 
     private Parser<String> aliasParser() {
-        return Parsers.token(TokenType.AS)
-                .flatMap(
-                        as -> identifierNameParser()
-                );
+
+        return Parsers.token(TokenType.AS).flatMap(token ->
+                identifierNameParser()
+        );
     }
 
-    private Parser<ProjectionModifiers>
-    projectionModifiersParser() {
-        return Parsers.optional(
-                orderByParser()
-        ).flatMap(
-                orderBy -> Parsers.optional(
-                        skipParser()
-                ).flatMap(
-                        skip -> Parsers.optional(
-                                limitParser()
-                        ).map(
-                                limit -> new ProjectionModifiers(
-                                        orderBy.orElse(
-                                                List.of()
-                                        ),
+    // =====================================================
+    // RETURN MODIFIERS
+    // =====================================================
+
+    private Parser<ProjectionModifiers> projectionModifiersParser() {
+
+        return Parsers.optional(orderByParser()).flatMap(orderBy ->
+                Parsers.optional(skipParser()).flatMap(skip ->
+                        Parsers.optional(limitParser()).map(limit ->
+                                new ProjectionModifiers(
+                                        orderBy.orElse(List.of()),
                                         skip,
                                         limit
                                 )
@@ -693,39 +558,32 @@ public final class CyphailParser {
     }
 
     private Parser<List<SortItem>> orderByParser() {
-        return Parsers.token(TokenType.ORDER)
-                .flatMap(
-                        order -> Parsers.token(
-                                TokenType.BY
-                        ).flatMap(
-                                by -> sortItemParser()
-                                        .flatMap(
-                                                first -> Parsers.many(
-                                                        commaThenSortItemParser()
-                                                ).map(
-                                                        rest -> prepend(
-                                                                first,
-                                                                rest
-                                                        )
-                                                )
-                                        )
+
+        return Parsers.token(TokenType.ORDER).flatMap(order ->
+                Parsers.token(TokenType.BY).flatMap(by ->
+                        sortItemParser().flatMap(first ->
+                                Parsers.many(
+                                        commaThenSortItemParser()
+                                ).map(rest ->
+                                        prepend(first, rest)
+                                )
                         )
-                );
+                )
+        );
     }
 
     private Parser<SortItem> commaThenSortItemParser() {
-        return Parsers.token(TokenType.COMMA)
-                .flatMap(
-                        comma -> sortItemParser()
-                );
+
+        return Parsers.token(TokenType.COMMA).flatMap(token ->
+                sortItemParser()
+        );
     }
 
     private Parser<SortItem> sortItemParser() {
-        return expressionParser().flatMap(
-                expression -> Parsers.optional(
-                        sortDirectionParser()
-                ).map(
-                        direction -> new SortItem(
+
+        return expressionParser().flatMap(expression ->
+                Parsers.optional(sortDirectionParser()).map(direction ->
+                        new SortItem(
                                 expression,
                                 direction
                         )
@@ -734,18 +592,15 @@ public final class CyphailParser {
     }
 
     private Parser<SortDirection> sortDirectionParser() {
+
         Parser<SortDirection> ascending =
-                Parsers.token(
-                        TokenType.ASCENDING
-                ).map(
-                        token -> SortDirection.ASCENDING
+                Parsers.token(TokenType.ASCENDING).map(token ->
+                        SortDirection.ASCENDING
                 );
 
         Parser<SortDirection> descending =
-                Parsers.token(
-                        TokenType.DESCENDING
-                ).map(
-                        token -> SortDirection.DESCENDING
+                Parsers.token(TokenType.DESCENDING).map(token ->
+                        SortDirection.DESCENDING
                 );
 
         return Parsers.or(
@@ -755,93 +610,143 @@ public final class CyphailParser {
     }
 
     private Parser<Expression> skipParser() {
-        return Parsers.token(TokenType.SKIP)
-                .flatMap(
-                        skip -> expressionParser()
-                );
+
+        return Parsers.token(TokenType.SKIP).flatMap(token ->
+                expressionParser()
+        );
     }
 
     private Parser<Expression> limitParser() {
-        return Parsers.token(TokenType.LIMIT)
-                .flatMap(
-                        limit -> expressionParser()
-                );
+
+        return Parsers.token(TokenType.LIMIT).flatMap(token ->
+                expressionParser()
+        );
     }
 
+    // =====================================================
+    // EXPRESSIONS
+    // =====================================================
+
+    /**
+     * Precedence:
+     *
+     * OR < AND < comparisons < grouped expressions
+     */
     private Parser<Expression> expressionParser() {
-        return simpleExpressionParser().flatMap(
-                left -> Parsers.optional(
-                        comparisonTailParser()
-                ).map(
-                        comparison -> comparison
-                                .<Expression>map(
-                                        tail -> new BinaryExpression(
-                                                left,
-                                                tail.operator(),
-                                                tail.right()
-                                        )
-                                )
-                                .orElse(left)
+
+        return logicalOrExpressionParser();
+    }
+
+    private Parser<Expression> logicalOrExpressionParser() {
+
+        return logicalAndExpressionParser().flatMap(first ->
+                Parsers.many(
+                        Parsers.token(TokenType.OR).flatMap(token ->
+                                logicalAndExpressionParser()
+                        )
+                ).map(rest ->
+                        foldBinaryExpressions(
+                                first,
+                                BinaryOperator.OR,
+                                rest
+                        )
                 )
         );
     }
 
-    private Parser<ComparisonTail> comparisonTailParser() {
-        return comparisonOperatorParser().flatMap(
-                operator -> simpleExpressionParser()
-                        .map(
-                                right -> new ComparisonTail(
-                                        operator,
-                                        right
-                                )
+    private Parser<Expression> logicalAndExpressionParser() {
+
+        return comparisonExpressionParser().flatMap(first ->
+                Parsers.many(
+                        Parsers.token(TokenType.AND).flatMap(token ->
+                                comparisonExpressionParser()
                         )
+                ).map(rest ->
+                        foldBinaryExpressions(
+                                first,
+                                BinaryOperator.AND,
+                                rest
+                        )
+                )
         );
     }
 
-    private Parser<BinaryOperator>
-    comparisonOperatorParser() {
+    private Parser<Expression> comparisonExpressionParser() {
+
+        return simpleExpressionParser().flatMap(left ->
+                Parsers.optional(comparisonTailParser()).map(comparison ->
+                        comparison.<Expression>map(tail ->
+                                new BinaryExpression(
+                                        left,
+                                        tail.operator(),
+                                        tail.right()
+                                )
+                        ).orElse(left)
+                )
+        );
+    }
+
+    private static Expression foldBinaryExpressions(
+            Expression first,
+            BinaryOperator operator,
+            List<Expression> rest
+    ) {
+
+        Expression result = first;
+
+        for (Expression right : rest) {
+            result = new BinaryExpression(
+                    result,
+                    operator,
+                    right
+            );
+        }
+
+        return result;
+    }
+
+    private Parser<ComparisonTail> comparisonTailParser() {
+
+        return comparisonOperatorParser().flatMap(operator ->
+                simpleExpressionParser().map(right ->
+                        new ComparisonTail(
+                                operator,
+                                right
+                        )
+                )
+        );
+    }
+
+    private Parser<BinaryOperator> comparisonOperatorParser() {
+
         Parser<BinaryOperator> equal =
-                Parsers.token(
-                        TokenType.EQUAL
-                ).map(
-                        token -> BinaryOperator.EQUAL
+                Parsers.token(TokenType.EQUAL).map(token ->
+                        BinaryOperator.EQUAL
                 );
 
         Parser<BinaryOperator> notEqual =
-                Parsers.token(
-                        TokenType.NOT_EQUAL
-                ).map(
-                        token -> BinaryOperator.NOT_EQUAL
+                Parsers.token(TokenType.NOT_EQUAL).map(token ->
+                        BinaryOperator.NOT_EQUAL
                 );
 
         Parser<BinaryOperator> lessThan =
-                Parsers.token(
-                        TokenType.LESS_THAN
-                ).map(
-                        token -> BinaryOperator.LESS_THAN
+                Parsers.token(TokenType.LESS_THAN).map(token ->
+                        BinaryOperator.LESS_THAN
                 );
 
         Parser<BinaryOperator> greaterThan =
-                Parsers.token(
-                        TokenType.GREATER_THAN
-                ).map(
-                        token -> BinaryOperator.GREATER_THAN
+                Parsers.token(TokenType.GREATER_THAN).map(token ->
+                        BinaryOperator.GREATER_THAN
                 );
 
         Parser<BinaryOperator> lessThanOrEqual =
-                Parsers.token(
-                        TokenType.LESS_THAN_OR_EQUAL
-                ).map(
-                        token ->
-                                BinaryOperator.LESS_THAN_OR_EQUAL
+                Parsers.token(TokenType.LESS_THAN_OR_EQUAL).map(token ->
+                        BinaryOperator.LESS_THAN_OR_EQUAL
                 );
 
         Parser<BinaryOperator> greaterThanOrEqual =
-                Parsers.token(
-                        TokenType.GREATER_THAN_OR_EQUAL
-                ).map(
-                        token ->
-                                BinaryOperator.GREATER_THAN_OR_EQUAL
+                Parsers.token(TokenType.GREATER_THAN_OR_EQUAL).map(token ->
+                        BinaryOperator.GREATER_THAN_OR_EQUAL
                 );
 
         return Parsers.or(
@@ -863,18 +768,38 @@ public final class CyphailParser {
     }
 
     private Parser<Expression> simpleExpressionParser() {
+
         return Parsers.or(
-                literalExpressionParser(),
-                variableOrPropertyParser()
+                parenthesizedExpressionParser(),
+                Parsers.or(
+                        literalExpressionParser(),
+                        variableOrPropertyParser()
+                )
         );
     }
 
+    private Parser<Expression> parenthesizedExpressionParser() {
+
+        return Parsers.token(TokenType.LEFT_PAREN).flatMap(left ->
+                expressionParser().flatMap(expression ->
+                        Parsers.token(TokenType.RIGHT_PAREN).map(right ->
+                                expression
+                        )
+                )
+        );
+    }
+
+    // =====================================================
+    // VARIABLES AND PROPERTY REFERENCES
+    // =====================================================
+
     private Parser<Expression> variableOrPropertyParser() {
-        return identifierNameParser().flatMap(
-                name -> Parsers.many(
+
+        return identifierNameParser().flatMap(name ->
+                Parsers.many(
                         propertyNameParser()
-                ).map(
-                        properties -> buildPropertyExpression(
+                ).map(properties ->
+                        buildPropertyExpression(
                                 name,
                                 properties
                         )
@@ -883,16 +808,17 @@ public final class CyphailParser {
     }
 
     private Parser<String> propertyNameParser() {
-        return Parsers.token(TokenType.DOT)
-                .flatMap(
-                        dot -> identifierNameParser()
-                );
+
+        return Parsers.token(TokenType.DOT).flatMap(token ->
+                identifierNameParser()
+        );
     }
 
     private Expression buildPropertyExpression(
             String variable,
             List<String> properties
     ) {
+
         Expression expression =
                 new VariableExpression(variable);
 
@@ -906,24 +832,24 @@ public final class CyphailParser {
         return expression;
     }
 
+    // =====================================================
+    // LITERAL EXPRESSIONS
+    // =====================================================
+
     private Parser<Expression> literalExpressionParser() {
+
         Parser<Expression> integer =
-                Parsers.token(
-                        TokenType.INTEGER
-                ).map(
-                        token -> new IntegerLiteralExpression(
+                Parsers.token(TokenType.INTEGER).map(token ->
+                        new IntegerLiteralExpression(
                                 Long.parseLong(
                                         token.lexeme()
                                 )
                         )
                 );
 
-        // Sprint P2: decimal literals.
         Parser<Expression> decimal =
-                Parsers.token(
-                        TokenType.FLOAT
-                ).map(
-                        token -> new FloatLiteralExpression(
+                Parsers.token(TokenType.FLOAT).map(token ->
+                        new FloatLiteralExpression(
                                 Double.parseDouble(
                                         token.lexeme()
                                 )
@@ -931,10 +857,8 @@ public final class CyphailParser {
                 );
 
         Parser<Expression> string =
-                Parsers.token(
-                        TokenType.STRING
-                ).map(
-                        token -> new StringLiteralExpression(
+                Parsers.token(TokenType.STRING).map(token ->
+                        new StringLiteralExpression(
                                 stripQuotes(
                                         token.lexeme()
                                 )
@@ -942,31 +866,18 @@ public final class CyphailParser {
                 );
 
         Parser<Expression> trueLiteral =
-                Parsers.token(
-                        TokenType.TRUE
-                ).map(
-                        token ->
-                                new BooleanLiteralExpression(
-                                        true
-                                )
+                Parsers.token(TokenType.TRUE).map(token ->
+                        new BooleanLiteralExpression(true)
                 );
 
         Parser<Expression> falseLiteral =
-                Parsers.token(
-                        TokenType.FALSE
-                ).map(
-                        token ->
-                                new BooleanLiteralExpression(
-                                        false
-                                )
+                Parsers.token(TokenType.FALSE).map(token ->
+                        new BooleanLiteralExpression(false)
                 );
 
         Parser<Expression> nullLiteral =
-                Parsers.token(
-                        TokenType.NULL
-                ).map(
-                        token ->
-                                new NullLiteralExpression()
+                Parsers.token(TokenType.NULL).map(token ->
+                        new NullLiteralExpression()
                 );
 
         return Parsers.or(
@@ -987,27 +898,34 @@ public final class CyphailParser {
         );
     }
 
+    // =====================================================
+    // HELPERS
+    // =====================================================
+
     private Parser<String> identifierNameParser() {
-        return Parsers.identifier()
-                .map(Token::lexeme);
+
+        return Parsers.identifier().map(
+                Token::lexeme
+        );
     }
 
     private String stripQuotes(String lexeme) {
-        if (lexeme.length() < 2) {
-            return lexeme;
-        }
 
-        return lexeme.substring(
-                1,
-                lexeme.length() - 1
-        );
+        return lexeme.length() < 2
+                ? lexeme
+                : lexeme.substring(
+                        1,
+                        lexeme.length() - 1
+                );
     }
 
     private <T> List<T> prepend(
             T first,
             List<T> rest
     ) {
+
         List<T> values = new ArrayList<>();
+
         values.add(first);
         values.addAll(rest);
 

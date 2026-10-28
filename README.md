@@ -1,651 +1,819 @@
-# Cyphail
 
-Cyphail is an experimental graph query language prototype developed for the course **EIF400 - Paradigmas de Programacion** at the **Universidad Nacional de Costa Rica (UNA), Escuela de Informatica**.
+# Cyphail — Sprint P2
 
-This repository contains the implementation developed for **Cyphail Sprint P1**.
+Cyphail is an academic prototype of a graph query language developed for **EIF400 — Programming Paradigms** at the **School of Informatics, National University of Costa Rica (UNA)**.
+
+Sprint P2 extends the Sprint P1 lexer, functional parser combinators, abstract syntax tree (AST), semantic analyzer, and command-line interface. Its main change is the replacement of simulated query execution with a **real SWI-Prolog engine accessed through the Machine Query Interface (MQI)**.
+
+This README documents the Sprint P2 implementation for the **November 2026** project phase: architecture, setup, execution, tests, verified behavior, and remaining steps before submission. The most recent documented Maven verification took place on **October 28, 2026** in the team's Windows environment. If the source changes afterward, rerun the relevant checks before submitting.
 
 ---
 
 ## Project Information
 
-- **Project:** Cyphail
-- **Version:** 0.1.0
-- **Course:** EIF400 - Paradigmas de Programacion
-- **University:** Universidad Nacional de Costa Rica
-- **School:** Escuela de Informatica
-- **Work Group:** 04
-- **Schedule:** 10:00 a.m.
-- **Group Code:** 04-10am
-- **Sprint:** P1
-- **Date:** September 2026
-
----
+| Field | Details |
+|---|---|
+| Project | Cyphail |
+| Sprint | P2 |
+| Application version | 0.1.0 |
+| Course | EIF400 — Programming Paradigms |
+| University | National University of Costa Rica (Universidad Nacional, UNA) |
+| School | School of Informatics (Escuela de Informática) |
+| Group | 04-10am |
+| Class time | 10:00 a.m. |
+| Main language | Java 26 |
+| Query execution engine | SWI-Prolog through MQI |
+| Academic term | Second semester, 2026 |
+| Project presentation month | November 2026 |
+| Last documented verification | October 28, 2026 (409 standard tests, 58 real MQI integration tests, clean package) |
 
 ## Team Members
 
-- Emmanuel Nunez Jimenez
+- Emmanuel Núñez Jiménez
 - Valery Alfaro Morales
-- Roy Arias Mejia
+- Roy Arias Mejía
 - Keynell Molina Mora
 - Julissa Solano Valverde
 
 ---
 
-## Sprint P1 Scope
+## Sprint P2 Scope
 
-Sprint P1 extends the initial P1.1 project setup with lexical analysis,
-parsing, Abstract Syntax Tree generation, semantic validation and AST
-visualization through the Cyphail REPL.
+Sprint P2 preserves the applicable Sprint P1 functionality and adds the following capabilities:
 
-The current implementation includes:
+- Multiline Cyphail statements terminated by a semicolon (`;`).
+- The `.load "path/to/file.cyphail"` command, which reads and executes statements from disk.
+- Relationship patterns, including incoming (`IN`), outgoing (`OUT`), and undirected (`NONE`) AST directions.
+- Node and relationship labels, variables, and properties.
+- `MATCH` and `WHERE` queries, including comparisons and logical conditions supported by the parser and code generator.
+- `CREATE` statements with or without a preceding `MATCH`.
+- `SET` for updating node or relationship properties.
+- `REMOVE` for removing properties.
+- `DELETE` for deleting nodes or relationships.
+- `DETACH DELETE` for deleting nodes together with their incident relationships.
+- AST-to-Prolog code generation and mapping between Cyphail and generated variables.
+- A broker that launches SWI-Prolog, opens an MQI socket connection, and reuses that connection during the REPL session.
+- MQI JSON response parsing using Gson and tabular result display.
+- Additional static semantic checks for relationship variables and reserved variable names.
 
-- Structured Java project using Maven.
-- Java 26 compatibility.
-- Command-line interface implemented with picocli.
-- Interactive Cyphail REPL.
-- `.help` command.
-- `.about` command.
-- `.exit` command.
-- `.use` command.
-- `.use <graph>` command.
-- `.tree` multiline AST query mode.
-- `.tree <query>` inline AST query mode.
-- Cyphail lexer.
-- Functional parser combinators implemented in Java.
-- Cyphail parser.
-- Abstract Syntax Tree (AST) model.
-- AST visitor and pretty-printer.
-- Basic semantic analysis.
-- Undefined-variable validation.
-- Support for the official Sprint P1 parsing cases.
-- Fake graph catalog.
-- Fake broker/query data loaded from JSON files on disk.
-- JUnit unit and integration tests.
-- Windows launcher through `cyphail.bat`.
-- Modular routing and command handlers.
-- Build and execution completely from CMD.
+The **Sprint P1 Fake Query Engine is no longer part of the query execution path**. The previous simulated query-result JSON files have also been removed.
 
-Sprint P1 still uses a fake engine/broker. The real SWI-Prolog execution
-engine is not part of this sprint.
-
----
-
-## Sprint P1 Query Scope
-
-The Sprint P1 parser is focused on the grammar and official test cases
-defined for this sprint.
-
-The current required scope includes:
-
-- Queries beginning with `MATCH`.
-- Node patterns.
-- More than one node pattern in the same `MATCH`.
-- Multiple labels in a node pattern.
-- Node properties.
-- Property expressions using already declared variables.
-- `WHERE`.
-- Simple comparisons:
-  - `<`
-  - `>`
-  - `<>`
-- `CREATE`.
-- `DELETE`.
-- `RETURN`.
-- Projection aliases with `AS`.
-- Semantic validation of undefined variables.
-
-Graph relationship patterns and nested `MATCH` expressions are outside the
-required Sprint P1 parser cases.
+The graph catalog used by `.use` is a separate legacy feature. It is not the engine used to execute Cyphail queries.
 
 ---
 
 ## Prerequisites
 
-The following software must be installed before building Cyphail:
+The following tools must be installed and accessible from the command line:
 
-- **JDK 26**
-- **Apache Maven 3.9 or later**
-- **Git**
-- Windows CMD for the commands shown in this README
+- **JDK 26** (the Maven compiler release is configured as `26`).
+- **Apache Maven**.
+- **SWI-Prolog** with MQI support and `swipl` on the system `PATH`.
+- **Git** for version control and the final bundle.
+- **Windows Command Prompt (CMD)** for the commands documented below.
 
-Verify Java:
+Verify the installation:
 
 ```cmd
 java -version
-```
-
-Verify the Java compiler:
-
-```cmd
 javac -version
-```
-
-Verify Maven:
-
-```cmd
 mvn -version
+swipl --version
+git --version
 ```
 
-Verify Git:
+The team has used SWI-Prolog 10.0.2 on Windows during development. SWI-Prolog must be available when running real MQI tests or starting the REPL. The README is stored as UTF-8; on some Windows CMD configurations, `type README.md` may display Unicode accents or the em dash incorrectly even when the file itself is valid. A UTF-8-aware editor should display the text correctly.
 
-```cmd
-git --version
+The engine source file is currently located at:
+
+```text
+src/main/prolog/engine.pl
 ```
 
 ---
 
 ## Project Structure
 
-The main project structure is organized as follows:
+The relevant directories and files are organized approximately as follows:
 
 ```text
 cyphail/
-|-- data/
-|   |-- graphs.json
-|   `-- queries/
-|-- pom.xml
 |-- README.md
-|-- .gitignore
+|-- pom.xml
 |-- cyphail.bat
+|-- .gitignore
+|-- docs/
+|-- data/
+|   `-- graphs.json
 |-- src/
 |   |-- main/
-|   |   `-- java/
-|   |       `-- cr/ac/una/eif400/cyphail/
-|   |           |-- ast/
-|   |           |-- compiler/
-|   |           |   |-- analyzer/
-|   |           |   |-- lexer/
-|   |           |   `-- parser/
-|   |           |       `-- combinator/
-|   |           |-- engine/
-|   |           |-- frontend/
-|   |           |   `-- handler/
-|   |           |-- model/
-|   |           `-- starter/
+|   |   |-- java/
+|   |   |   `-- cr/ac/una/eif400/cyphail/
+|   |   |       |-- ast/
+|   |   |       |-- compiler/
+|   |   |       |   |-- analyzer/
+|   |   |       |   |-- codegen/
+|   |   |       |   |-- lexer/
+|   |   |       |   `-- parser/
+|   |   |       |       `-- combinator/
+|   |   |       |-- data/
+|   |   |       |-- engine/
+|   |   |       |   `-- mqi/
+|   |   |       |-- frontend/
+|   |   |       |   `-- handler/
+|   |   |       |-- model/
+|   |   |       `-- starter/
+|   |   `-- prolog/
+|   |       |-- engine.pl
+|   |       `-- graph_store.pl
 |   `-- test/
 |       `-- java/
-`-- target/
+`-- target/                   (generated by Maven)
 ```
 
-The `target/` directory is generated by Maven and is ignored by Git.
-
-The `data/` directory contains the external fake JSON data used by the
-Sprint P1 fake broker/query engine.
+The `target/` directory contains generated build and test artifacts and is ignored by Git. The legacy `data/graphs.json` file is used by the graph catalog and must not be confused with the removed P1 fake query-response files. `graph_store.pl` implements mutable graph storage used by `engine.pl`; both Prolog files are required by the current execution design.
 
 ---
 
 ## Architecture Overview
 
-The implementation follows the general Cyphail architecture defined for the
-course.
-
-At a high level:
+Cyphail P2 follows this execution pipeline:
 
 ```text
-User / Script
-     |
-     v
-Frontend / REPL
-     |
-     v
-CommandRouter
-     |
-     +--> HelpCommandHandler
-     +--> AboutCommandHandler
-     +--> UseCommandHandler
-     +--> TreeCommandHandler
-     +--> FakeQueryHandler
-     +--> ExitCommandHandler
+Interactive REPL / .load script
+             |
+             v
+        CommandRouter
+             |
+             v
+      PrologQueryHandler
+             |
+             v
+  Lexer + Functional Parser Combinators
+             |
+             v
+         Cyphail AST
+             |
+             v
+       SemanticAnalyzer
+             |
+             v
+     PrologCodeGenerator
+             |
+             v
+        Prolog goals
+             |
+             v
+          MqiBroker
+             |
+             v
+           MqiClient
+             |
+             v
+        Local MQI socket
+             |
+             v
+     SWI-Prolog / engine.pl
+             |
+             v
+        MQI JSON response
+             |
+             v
+   MqiResponseParser + Gson
+             |
+             v
+       PrologResult / Rows
+             |
+             v
+      Tabular REPL output
 ```
 
-The Sprint P1 compiler path is:
+### REPL and Routing
 
-```text
-Cyphail source query
-        |
-        v
-      Lexer
-        |
-        v
-Functional parser combinators
-        |
-        v
-  CyphailParser
-        |
-        v
-       AST
-        |
-        +--> SemanticAnalyzer
-        |
-        `--> AstTreePrinter
-```
+The REPL receives interactive commands and Cyphail statements. A statement may span multiple lines and is dispatched when its terminating semicolon is received. `CommandRouter` directs each completed statement to the appropriate handler.
 
-The fake data path is:
+### Lexer, Parser, and AST
 
-```text
-REPL query
-    |
-    v
-FakeQueryHandler
-    |
-    v
-FakeQueryEngine
-    |
-    v
-JSON data on disk
-    |
-    v
-FakeQueryResult
-    |
-    v
-Tabular output
-```
+The lexer and functional parser combinators recognize Cyphail syntax. The parser constructs an AST that represents patterns, expressions, projections, and update clauses. The `.tree` command displays this structure without executing the query against Prolog.
 
-The external JSON design allows fake results to be changed without changing
-or recompiling Java source code.
+### Semantic Analysis
+
+The semantic analyzer validates variable declarations, uses, and role restrictions before code generation. Node variables may be reused as joins, but relationship variables cannot be redeclared within the same query or reused as node variables.
+
+### Code Generation
+
+`PrologCodeGenerator` translates the AST into Prolog goals that are understood by the engine. It also manages the association between Cyphail variables, generated Prolog variables, computed values, and result columns.
+
+The query lifecycle uses Prolog's `setup_call_cleanup/3` so that temporary generated query clauses are erased even when execution raises an exception. The cleanup behavior was tested directly in SWI-Prolog and protected by code-generation unit tests.
+
+### MQI Broker and Engine
+
+`MqiBroker` launches SWI-Prolog and establishes communication over a socket using MQI. The REPL reuses the broker during the session and closes it when the session ends. The engine executes the generated goals and returns JSON-formatted MQI responses.
+
+### Result Processing
+
+`MqiResponseParser` processes MQI responses using Gson. The query handler extracts the relevant values and displays results as tables.
 
 ---
 
 ## Building the Project
 
-Open CMD in the root directory of the project.
-
-Example:
+Open Windows CMD in the repository root (the folder containing `pom.xml` and `src`). For example, if the project is inside your Documents folder:
 
 ```cmd
-cd C:\path\to\cyphail
+cd "%USERPROFILE%\Documents\cyphail"
 ```
 
-Clean, test and package the complete project with:
+If your clone is stored elsewhere, replace that path with its actual location.
+
+Run a normal build:
+
+```cmd
+mvn package
+```
+
+Run a clean build when the `target/` directory is not locked by another process:
 
 ```cmd
 mvn clean package
 ```
 
-A successful build must finish with:
-
-```text
-BUILD SUCCESS
-```
-
-The executable JAR is generated at:
+The Maven Shade plugin is configured to produce an executable JAR with dependencies included:
 
 ```text
 target\cyphail-0.1.0.jar
 ```
 
----
+A successful Maven build ends with:
 
-## Running Tests
-
-Run the complete test suite with:
-
-```cmd
-mvn test
+```text
+BUILD SUCCESS
 ```
 
-A clean verification can also be performed with:
+**Verified on October 28, 2026:** `mvn clean package` completed with `BUILD SUCCESS`, compiled **86 production Java files** and **63 test Java files**, passed **409 standard tests** (zero failures, errors, or skips), and generated the shaded JAR `target\cyphail-0.1.0.jar`.
 
-```cmd
-mvn clean test
-```
+The separate `mvn "-Dtest=*LiveIT" test` run also completed with `BUILD SUCCESS`, passing **58 real MQI integration tests**.
 
-Tests are implemented with JUnit and executed through Maven Surefire.
-
-At the time of the Sprint P1 final review, the project contains unit and
-integration tests for:
-
-- AST model.
-- AST tree printer.
-- Semantic analyzer.
-- Lexer.
-- Functional parser combinators.
-- Cyphail parser.
-- Fake query engine.
-- Command router.
-- `.tree` command handler.
-- REPL.
-- Graph catalog.
-- Cyphail CLI.
+These results describe the source revision tested on that date. Rerun the checks after any subsequent source changes.
 
 ---
 
 ## Running Cyphail
 
-After a successful build, start the REPL from the root directory with:
+With the executable JAR available, start the REPL from the **project root**:
 
 ```cmd
 java -jar target\cyphail-0.1.0.jar repl
 ```
 
-The program displays a welcome message similar to:
-
-```text
-Welcome to Cyphail-04-10am v.0.1. September 2026. ESCINF/UNA EIF400-II-2026
-
-Visit www.whatiscyphail.com for more information
-Type ".help" for more information and commands
-
-Type ".exit" to quit
-
->>>
-```
-
-The Windows launcher can also be used:
+The Windows launcher may also be used:
 
 ```cmd
-cyphail repl
+cyphail.bat repl
 ```
 
-The `cyphail.bat` file forwards command-line arguments to the Java
-application.
+The launcher verifies Java and the built JAR, temporarily changes to the repository directory, passes arguments to Java, then restores the original working directory and returns the Java process exit code.
 
----
+For example, from the parent folder:
 
-## Command-Line Help
+```cmd
+cyphail\cyphail.bat repl
+```
 
-General command-line help:
+**Manually verified on October 27, 2026:** the launcher started the REPL from the repository root **and** from its parent folder; a real `CREATE` followed by a `MATCH` returned the same node ID within the remote-folder launch session.
+
+The startup text included:
+
+```text
+Welcome to Cyphail v0.1.0 - Sprint P2
+November 2026
+```
+
+General CLI help:
 
 ```cmd
 java -jar target\cyphail-0.1.0.jar --help
 ```
 
-or:
-
-```cmd
-cyphail --help
-```
-
-Version information:
+Application version:
 
 ```cmd
 java -jar target\cyphail-0.1.0.jar --version
 ```
 
-or:
+### Engine Path Requirement
 
-```cmd
-cyphail --version
+The current REPL startup resolves the Prolog engine from this project-relative path:
+
+```text
+src/main/prolog/engine.pl
 ```
+
+The engine also depends on the accompanying `src/main/prolog/graph_store.pl`. Keep both files in the expected project layout.
+
+Therefore, invoke `java -jar` from the repository root, or use `cyphail.bat` to run from another working directory.
+
+The launcher selects the repository root automatically; it still needs the `src/main/prolog/engine.pl` file in the project tree.
+
+**Running the standalone JAR without this engine file or from an unrelated directory has not been verified** and remains part of the packaging audit.
 
 ---
 
 ## REPL Commands
 
-### `.help`
+| Command | Purpose |
+|---|---|
+| `.help` | Display REPL help. |
+| `.about` | Display project and team information. |
+| `.use` | List graphs from the legacy catalog. |
+| `.use <graph>` | Check the requested graph against the catalog. |
+| `.tree` | Enter multiline AST inspection mode. |
+| `.tree <query>` | Parse and display a query AST. |
+| `.load "path/to/script.cyphail"` | Read and execute Cyphail statements from a file. |
+| `.exit` | Exit the REPL and close the MQI session. |
 
-Displays the available REPL commands.
+Cyphail statements entered directly in the REPL must be terminated with `;`.
 
-```text
->>> .help
-```
+The `.tree` commands inspect queries; they do not mutate the Prolog graph.
 
-The Sprint P1 help includes:
+**Command review on October 27, 2026:** the current `HelpCommandHandler.java` source lists `.load` and the other commands above, while `.about` was executed manually and displayed the P2 information, November 2026 date, and all five team members.
 
-```text
-.help                 Show available commands
-.about                Show project and author information
-.use                  Show available graphs
-.use <graph>          Select an available graph
-.tree                 Start multiline AST query mode
-.tree <query>         Parse a query and print its AST
-.exit                 Exit the Cyphail REPL
-```
+A direct interactive `.help` output check can be included in the final smoke test.
 
----
+### `.use` and the Legacy Graph Catalog
 
-### `.about`
+The `.use` command reads `data/graphs.json`.
 
-Displays project, Sprint P1, course, group and author information.
+In the current implementation, `.use <graph>` reports whether the graph exists in that catalog; it **does not switch the active graph inside the Prolog engine**.
 
-```text
->>> .about
-```
-
-It also summarizes the main Sprint P1 features.
+Some inherited messages may contain fixed P1 timing values and must not be interpreted as real MQI performance measurements.
 
 ---
 
-### `.use`
+## Multiline Statements
 
-Displays the fake graphs currently available.
+A regular Cyphail query can span several lines:
 
-```text
->>> .use
+```cypher
+MATCH (p:Person)
+WHERE p.age > 30
+RETURN p.name, p.age;
 ```
+
+The REPL accumulates input until the semicolon completes the statement.
+
+The completed query is then parsed, analyzed, generated, and sent to the real engine.
 
 ---
 
-### `.use <graph>`
+## Running Scripts with `.load`
 
-Selects an available fake graph.
+Create a UTF-8 file named `example_p2.cyphail` in the project root:
 
-Example:
+```cypher
+CREATE (p:ExampleLoadP2 {name: 'FromFile'})
+RETURN p;
 
-```text
->>> .use amigos
+MATCH (p:ExampleLoadP2)
+RETURN p, p.name;
 ```
 
-An unavailable graph produces an error without terminating the REPL.
+Start the REPL and enter:
+
+```text
+.load "example_p2.cyphail"
+```
+
+The file handler reads and dispatches complete statements **in their original order**, using the same routing and MQI session as interactive queries.
+
+A later statement may therefore read data created by an earlier one.
+
+The command reports missing files and incomplete statements instead of silently ignoring them. The path must be enclosed in quotation marks.
 
 ---
 
-### `.tree`
+## Verified Manual REPL Smoke Tests — October 27, 2026
 
-Starts multiline query capture mode.
+The following was executed using `cyphail\cyphail.bat repl` while the Windows CMD working directory was the **parent** of the repository.
 
-Example:
+This verified launcher-relative path handling, actual MQI execution, and graph state reuse within a single REPL session:
 
-```text
->>> .tree
->>> MATCH (m:Movie)
->>> WHERE m.year > 1990
->>> RETURN m.title AS title, m.year AS year
+```cypher
+CREATE (p:LauncherP2 {name: 'ExternalFolderTest'}) RETURN p;
+
+MATCH (p:LauncherP2 {name: 'ExternalFolderTest'})
+RETURN p, p.name;
 ```
 
-The query is tokenized, parsed into the Cyphail AST, semantically analyzed
-and printed in a structured tree representation.
-
-Example output:
+Observed REPL output:
 
 ```text
-Query{
-  Match:{
-    Patterns:[
-      PatternNode:{
-        var: m
-        labels: [Movie]
-        properties: []
-      }
-    ]
-  }
-  Where:{
-    Expr: (> (. m year) 1990)
-  }
-  Updates:[]
-  Return:{
-    Projection:{
-      Items:[
-        {as (. m title) title},
-        {as (. m year) year}
-      ]
-      Modifiers:[]
-    }
-  }
-}
+p
+cy_node_0
+
+p p.name
+cy_node_0 'ExternalFolderTest'
 ```
+
+The node variable `p` returned only its unique graph ID, as required by the Sprint P2 `RETURN` restriction.
+
+The same ID appeared in both statements.
+
+This test does **not** establish persistent storage across separate REPL sessions.
+
+The `.about` and `.exit` commands were also exercised manually; `.about` displayed the P2 details and five authors, and `.exit` returned cleanly to CMD.
 
 ---
 
-### `.tree <query>`
+## Sprint P2 Query Examples
 
-Sprint P1 also supports the query directly on the same command line.
+The examples below demonstrate supported language constructs.
 
-Example:
+Results depend on the contents of the Prolog graph in the current session.
 
-```text
->>> .tree MATCH (m:Movie) RETURN m.title, m.year AS year
+The included example graph provides some `Person` and `Amigo` records, while the other example labels are created by the illustrated statements. Results may vary if the graph has been changed.
+
+### 1. Match Nodes and Properties
+
+```cypher
+MATCH (p:Person)
+RETURN p.name, p.age;
 ```
 
-This produces the corresponding AST and immediately returns control to the
-REPL.
+### 2. Filter with WHERE
+
+```cypher
+MATCH (p:Person)
+WHERE p.age > 30
+RETURN p.name, p.age;
+```
+
+### 3. Match Directed Relationships
+
+```cypher
+MATCH (a:Person)-[r:Amigo]->(b:Person)
+RETURN r, a.name, b.name;
+```
+
+### 4. Reuse a Node Variable for a Join
+
+```cypher
+MATCH (a:Person)-[r:Amigo]->(b:Person),
+      (b)-[s:Amigo]->(c:Person)
+RETURN a.name, b.name, c.name;
+```
+
+Here, `b` refers to the same node in both patterns.
+
+Reusing a node variable in this way is valid.
+
+### 5. Create a Node without MATCH
+
+```cypher
+CREATE (p:ExampleP2 {name: 'Node_P2', age: 27})
+RETURN p;
+```
+
+### 6. Read the Created Node
+
+```cypher
+MATCH (p:ExampleP2 {name: 'Node_P2'})
+RETURN p, p.name, p.age;
+```
+
+### 7. Update a Node Property
+
+```cypher
+MATCH (p:ExampleP2 {name: 'Node_P2'})
+SET p.age = 35
+RETURN p, p.age;
+```
+
+### 8. Remove a Node Property
+
+```cypher
+MATCH (p:ExampleP2 {name: 'Node_P2'})
+REMOVE p.age
+RETURN p;
+```
+
+### 9. Create a Relationship with Properties
+
+```cypher
+CREATE (a:ExampleRelationP2 {name: 'Source'})
+       -[r:LinkP2 {since: 2026, grade: 8.5}]->
+       (b:ExampleRelationP2 {name: 'Target'})
+RETURN a, r, b;
+```
+
+### 10. Read Relationship Properties
+
+```cypher
+MATCH (a:ExampleRelationP2)-[r:LinkP2]->(b:ExampleRelationP2)
+RETURN r, r.since, r.grade;
+```
+
+### 11. Update a Relationship Property
+
+```cypher
+MATCH (a:ExampleRelationP2)-[r:LinkP2]->(b:ExampleRelationP2)
+SET r.grade = 9.5
+RETURN r, r.grade;
+```
+
+### 12. Remove a Relationship Property
+
+```cypher
+MATCH (a:ExampleRelationP2)-[r:LinkP2]->(b:ExampleRelationP2)
+REMOVE r.grade
+RETURN r, r.since;
+```
+
+### 13. Delete a Relationship
+
+```cypher
+MATCH (a:ExampleRelationP2)-[r:LinkP2]->(b:ExampleRelationP2)
+DELETE r;
+```
+
+### 14. Detach and Delete a Node
+
+```cypher
+MATCH (a:ExampleRelationP2 {name: 'Source'})
+DETACH DELETE a;
+```
+
+These statements are intended to be executed against the real MQI-connected engine.
+
+Their results are not read from prerecorded JSON response files.
 
 ---
 
-### `.exit`
+## RETURN Semantics
 
-Terminates the interactive REPL.
+Under the Sprint P2 specification, when a `RETURN` item is a pattern variable, the result contains **only the unique ID** of the corresponding node or relationship.
 
-```text
->>> .exit
+For a node:
+
+```cypher
+MATCH (p:Person)
+RETURN p;
 ```
+
+For a relationship:
+
+```cypher
+MATCH (a:Person)-[r:Amigo]->(b:Person)
+RETURN r;
+```
+
+To return individual attributes, use property expressions:
+
+```cypher
+MATCH (p:Person)
+RETURN p.name, p.age;
+```
+
+This ID-only rule is part of the prototype scope and does not attempt to return full Cypher-style node or relationship objects.
 
 ---
 
-## Syntax Error Handling
+## Static Semantic Validation
 
-Lexical or parsing problems used with `.tree` are reported directly in the
-REPL.
+Sprint P2 extends the semantic analyzer with additional restrictions.
 
-Example:
+### 1. A Relationship Variable Cannot Be Repeated
 
-```text
->>> .tree MATCH (m:Movie RETURN m.title
-Syntax error: Expected RIGHT_PAREN but found RETURN at token position 5
->>>
+The following query must be rejected because `r` is declared in two distinct relationship patterns:
+
+```cypher
+MATCH (a:Person)-[r:Amigo]->(b:Person),
+      (c:Person)-[r:Amigo]->(d:Person)
+RETURN a;
 ```
 
-The REPL remains available after the error.
+### 2. A Variable Cannot Be Both a Node and a Relationship
+
+This query must be rejected because `a` is used in both roles:
+
+```cypher
+MATCH (a:Person)-[a:Amigo]->(b:Person)
+RETURN a;
+```
+
+### 3. Cyphail Variable Names Cannot Start with `__`
+
+This query must be rejected:
+
+```cypher
+MATCH (__person:Person)
+RETURN __person;
+```
+
+The `__` prefix is reserved to prevent name collisions when code generation creates Prolog variables and internal identifiers.
+
+### 4. Reusing a Node Variable Is Allowed
+
+This query is valid because `b` joins two patterns:
+
+```cypher
+MATCH (a:Person)-[r:Amigo]->(b:Person),
+      (b)-[s:Amigo]->(c:Person)
+RETURN a.name, b.name, c.name;
+```
+
+### 5. References to Undefined Variables
+
+The project preserves the earlier semantic checks for variables used before their declaration or used without any valid declaration.
+
+Static semantic errors are identified before the generated query is sent to SWI-Prolog.
 
 ---
 
-## Semantic Validation
+## Sprint P1 Compatibility
 
-Sprint P1 performs basic semantic validation over the generated AST.
+The following Sprint P1 components remain relevant to P2:
 
-Variables used in expressions must have been defined by an earlier pattern.
+- Command-line application and modular command routing.
+- Lexer and functional parser combinators.
+- Cyphail AST and visitors.
+- Semantic analyzer.
+- `.tree` query inspection.
+- Existing REPL commands and graph catalog.
+- Applicable unit and integration tests.
 
-Example:
+Representative P1 parsing cases include:
 
-```text
->>> .tree
->>> MATCH (p:Person), (o:Order {personId: p.id, status: "cancelled"})
->>> WHERE q.age > 60
->>> RETURN q AS name
-Undefined variable 'q' in WHERE clause.
-Undefined variable 'q' in RETURN clause.
->>>
-```
+### Pattern and Projection
 
-The analyzer also validates declaration order.
-
-Example:
-
-```text
->>> .tree
->>> MATCH (o:Order {personId: p.id, status: "cancelled"}), (p:Person)
->>> WHERE p.age > 60
->>> CREATE (a:Archive {id: o.id, name: "retired", year: 2026})
->>> DELETE o
->>> RETURN p.name AS name
-Undefined variable 'p' in MATCH pattern.
->>>
-```
-
----
-
-## Official Sprint P1 Parsing Examples
-
-The parser supports the official Sprint P1 case categories, including:
-
-### Pattern and projection
-
-```text
+```cypher
 MATCH (m:Movie)
-RETURN m.title,
-       m.year AS year
+RETURN m.title, m.year AS year;
 ```
 
-### Pattern, WHERE and projection
+### WHERE and Projection
 
-```text
+```cypher
 MATCH (b:Book)
 WHERE b.pages < 300
-RETURN b.title,
-       b.pages AS totalPages
+RETURN b.title, b.pages AS totalPages;
 ```
 
-### Multiple labels and properties
+### Multiple Labels and Properties
 
-```text
+```cypher
 MATCH (a:Person:Employee {id: 1})
 WHERE a.age > 30
-RETURN a.name AS name,
-       a.age AS age
+RETURN a.name AS name;
 ```
 
-### Multiple disconnected patterns
+### Disconnected Patterns
 
-```text
+```cypher
 MATCH (m:Movie), (p:Person)
 WHERE m.year > 2000
-RETURN m.title AS title,
-       p.name AS actor
+RETURN m.title, p.name;
 ```
 
-### Attribute comparison
+### Attribute Comparisons
 
-```text
+```cypher
 MATCH (m:Movie), (p:Person)
 WHERE m.year <> p.age
-RETURN m.title AS title,
-       p.name AS name
+RETURN m.title, p.name;
 ```
 
-### MATCH and CREATE
-
-```text
-MATCH (p:Person)
-WHERE p.age > 18
-CREATE (c:Certificate {issuedTo: "adult", year: 2026})
-RETURN p.name AS name,
-       p.age AS age
-```
-
-### Property expression
-
-```text
-MATCH (p:Person {id: 1}), (o:Order {personId: p.id})
-RETURN p.name AS name,
-       o.total AS total
-```
-
-### MATCH, CREATE and DELETE
-
-```text
-MATCH (p:Person), (o:Order {personId: p.id, status: "cancelled"})
-WHERE p.age > 60
-CREATE (a:Archive {id: o.id, name: "retired", year: 2026})
-DELETE o
-RETURN p.name AS name
-```
+These examples document language parsing cases, not guaranteed preloaded database contents.
 
 ---
 
-## Fake Broker and JSON Data
+## Removal of the P1 Fake Query Engine
 
-The fake engine/broker remains intentionally fake during Sprint P1.
+In P1, predefined query results were returned from JSON files on disk.
 
-Unlike the initial P1.1 implementation, fake query information is no longer
-required to be hard-coded in Java source code.
+P2 replaces that approach with actual SWI-Prolog execution through MQI.
 
-The fake data is stored in the project `data/` directory in JSON format.
+The following obsolete production classes have been removed:
 
-This allows the fake data to be modified on disk and observed from the REPL
-without recompiling Java source code.
+```text
+FakeQueryEngine.java
+FakeQueryHandler.java
+FakeQueryResult.java
+FakeQueryJsonRepository.java
+```
 
-This design prepares the broker boundary for later integration with JSON
-responses produced by the SWI-Prolog engine.
+The corresponding fake-engine test and the four prerecorded JSON files under `data/queries/` have also been removed.
+
+The current execution path uses `PrologQueryHandler`, code generation, the MQI broker and client, and the Prolog engine.
+
+`data/graphs.json` is intentionally retained for the independent legacy `.use` catalog.
+
+---
+
+## Automated Tests
+
+The project uses **JUnit 5** and **Maven Surefire**.
+
+The standard suite and the `*LiveIT` real-MQI integration suite use separate Maven selectors.
+
+The test totals below refer to their **separate executions**; they are not one combined Maven run.
+
+### General Test Suite
+
+```cmd
+mvn test
+```
+
+This suite covers the lexer, AST, visitors, parser combinators, parser, semantic analyzer, code generation, frontend, REPL, command routing, and other applicable units and integrations.
+
+### Live MQI Integration Tests
+
+The live-MQI test classes are not automatically included in a normal `mvn test` run.
+
+Execute them explicitly:
+
+```cmd
+mvn "-Dtest=*LiveIT" test
+```
+
+These tests cover real MQI connections, the Prolog engine, CodeGen, and supported graph operations.
+
+### Frontend Integration Tests
+
+The following command runs the main frontend integration test classes:
+
+```cmd
+mvn "-Dtest=CommandRouterIntegrationTest,ReplIntegrationTest,ReplLoadIntegrationTest,ReplMultilineIntegrationTest,PrologQueryHandlerIntegrationTest" test
+```
+
+### Last Verified Results — October 28, 2026
+
+| Command / suite | Tests | Failures | Errors | Skipped | Outcome |
+|---|---:|---:|---:|---:|---|
+| `mvn test` (standard suite) | 409 | 0 | 0 | 0 | BUILD SUCCESS |
+| `mvn "-Dtest=*LiveIT" test` (real MQI suite) | 58 | 0 | 0 | 0 | BUILD SUCCESS |
+| `mvn clean package` (clean build and standard suite) | 409 | 0 | 0 | 0 | BUILD SUCCESS; shaded JAR created |
+
+The **409 standard tests** and **58 live-MQI tests** were executed in separate runs and must not be described as one Maven invocation.
+
+The real-MQI suite covers CodeGen, CREATE, SET, REMOVE, DELETE, WHERE logic, graph storage and MQI connections.
+
+Regression tests verify `SET` on original Prolog relationships and `MATCH + CREATE` between original nodes or between original and newly created nodes.
+
+The five tests in `PrologQueryHandlerIntegrationTest` are included in the 409-test standard suite.
+
+The clean package result and both test-suite results are valid for the source revision verified on **October 28, 2026**.
+
+They do not automatically verify future code changes or an uncommitted final revision.
+
+**Before the final commit:** audit the remaining SPEC requirements and review the Git diff. If any production or test source changes, repeat the clean build and both test suites, and confirm that the submitted Git commit matches the verified code.
+
+---
+
+## Troubleshooting Maven Cleanup on Windows
+
+During development, Windows prevented Maven from deleting files inside `target/test-classes/` during the `clean` phase:
+
+```text
+Failed to delete ... target/test-classes/...
+```
+
+This means the clean goal failed before a clean compilation and test run could finish.
+
+It does **not** mean that the earlier successful test suites contained failing tests.
+
+Check whether an IDE, terminal, Java process, or another program is holding files in `target/` open.
+
+Do not terminate unrelated processes or delete system files indiscriminately.
+
+The normal suite can still be executed using:
+
+```cmd
+mvn test
+```
+
+However, passing `mvn test` is not a substitute for verifying `mvn clean test` or `mvn clean package` before delivery.
+
+---
+
+## Current Scope and Outstanding Verification
+
+Cyphail P2 is an academic prototype, not a complete production implementation of Cypher or a production graph database.
+
+The following distinctions and remaining checks are important:
+
+- **Verified: real execution.** The REPL executes Cyphail statements through SWI-Prolog/MQI rather than the P1 fake engine.
+- **Verified: graph state within one session.** An external-folder launcher test created `cy_node_0` and then matched the same node and its `name` property without restarting the REPL.
+- **Not established: permanent persistence.** Do not assume that graph data survives a new REPL session.
+- **Legacy behavior:** `.use` reads `data/graphs.json`; it does not switch the active graph inside SWI-Prolog.
+- **Verified: launcher path handling.** `cyphail.bat repl` runs from the project root or a different current directory when the repository structure is available.
+- **Not verified: fully independent JAR.** The JAR still relies on the external project-relative Prolog source file unless packaging is explicitly extended and tested.
+- **Verified: clean Maven build.** After an earlier Windows file-lock issue, `mvn clean package` completed successfully again on October 28, 2026, with 409 standard tests and a shaded JAR.
+- **Verified regressions:** original graph relationship updates through `SET` and relationships created by `MATCH + CREATE` between original sample nodes or mixed original/new nodes passed live MQI integration tests.
+- **Final audit needed:** check every P2 SPEC example and edge condition, P1 behavior, `RETURN` ID semantics for relationships, source-level functional programming requirements, and any remaining legacy user-facing messages.
+- **Final regression if code changes:** rerun both test suites and `mvn clean package` after any additional source changes. Then confirm that the final JAR, README, Git history, bundle, and ZIP are consistent.
+
+Successful tests are evidence of the cases exercised, not proof that every possible query or deployment environment is covered.
 
 ---
 
@@ -653,80 +821,98 @@ responses produced by the SWI-Prolog engine.
 
 - Java 26
 - Apache Maven
+- JUnit 5
 - picocli
 - Gson
-- JUnit
+- SWI-Prolog
+- MQI
 - Git
 - GitHub
+
+The parser uses functional parser combinators, and the REPL uses Java stream operations to dispatch complete statements.
+
+These implementation choices still need to be checked against the final wording of the professor's functional-programming requirements; passing tests alone does not establish complete SPEC compliance.
 
 ---
 
 ## Sources and Credits
 
-The project was developed from the official course material for
-EIF400 - Paradigmas de Programacion, including:
+The project was developed using official course materials and related technical documentation, including:
 
-- Cyphail initial specification.
-- Cyphail general architecture.
-- Cyphail Sprint P1 specification.
-- Cyphail Sprint P1 grammar.
-- Cyphail Sprint P1 official test cases.
-- Cyphail Sprint P1 review guide.
+- Cyphail project introduction and architecture.
+- Sprint P1 specification, grammar, and official parsing test cases.
+- Preliminary Sprint P2 specification provided by the instructor.
+- Instructor-provided SWI-Prolog MQI demonstration.
 - Java documentation.
 - Apache Maven documentation.
+- JUnit documentation.
 - picocli documentation.
 - Gson documentation.
-- JUnit documentation.
+- SWI-Prolog and MQI documentation.
 
-Cyphail is the official project name established for the course.
+Cyphail is the project name established for EIF400.
 
 ---
 
 ## Artificial Intelligence Use Declaration
 
-Generative artificial intelligence was used as a support tool during the
-development and review of Cyphail.
+Generative artificial intelligence was used as a supporting tool during the development and review of Cyphail, including explanations of course concepts, architectural suggestions, code suggestions, debugging, testing recommendations, documentation drafting, and review of parser, AST, REPL, and MQI behavior.
 
-Its use included:
+The project team remains responsible for reviewing and understanding all suggested changes, compiling and testing the implementation, maintaining the source code, and defending the submitted work.
 
-- explanations of course and project concepts;
-- project-structure suggestions;
-- code suggestions;
-- testing suggestions;
-- documentation drafting;
-- troubleshooting;
-- review of compiler, AST and REPL behavior.
-
-AI suggestions were manually reviewed, copied, adapted, compiled, executed
-and tested during development.
-
-The project team is responsible for understanding, maintaining, demonstrating
-and defending all submitted code.
-
-The implementation has been verified through manual builds, tests and
-executions from Windows CMD.
+AI tools must not be treated as an unexplained black box.
 
 ---
 
-## Current Sprint Limitations
+## Sprint P2 Submission
 
-Sprint P1 does not yet provide the final Cyphail execution engine.
+The preliminary SPEC identifies **November 1, 2026** as a projected delivery date; the definitive deadline is subject to the instructor's confirmation.
 
-The current known limitations include:
+The submission should follow the official course procedure and naming convention:
 
-- SWI-Prolog is not yet used as the real execution engine.
-- The broker/engine behavior remains fake.
-- Real graph persistence is not implemented.
-- Real graph query execution is not implemented.
-- Relationship-pattern parsing is outside the official Sprint P1 node-pattern
-  test scope.
-- Nested `MATCH` expressions are outside the Sprint P1 test scope.
+```text
+EIF400-II-2026-Cyphail-P2-NN-GG.zip
+```
 
-These elements belong to later Cyphail development stages.
+The ZIP must contain:
+
+```text
+cyphail.bundle
+```
+
+The bundle must represent the final submitted Git commit.
+
+Before preparing the submission, the team should confirm the final build, general tests, live MQI tests, source changes, documentation, GitHub history, bundle contents, and archive integrity.
+
+The instructor also expects evidence of ongoing Git contributions from all team members and expects every member to understand and defend the complete codebase.
 
 ---
 
-## License
+## Final Verification and Delivery Checklist
 
-This project is an academic work developed for
-EIF400 - Paradigmas de Programacion at Universidad Nacional de Costa Rica.
+Complete these checks before treating the repository as ready for submission:
+
+- [x] A clean Maven package completed on October 28, 2026, and generated the shaded JAR (409 standard tests).
+- [x] General test suite passed (409 tests; zero failures, errors, or skips).
+- [x] Live MQI suite passed (58 tests; zero failures, errors, or skips).
+- [x] JAR started from the repository root; `.about` and `.exit` were verified.
+- [x] Windows launcher started from another directory; real `CREATE` and `MATCH` shared session state.
+- [x] Live MQI regression tests passed for SET on original relationships and CREATE involving original nodes.
+- [x] Five `PrologQueryHandlerIntegrationTest` cases passed, including rejection of a duplicated relationship variable.
+- [ ] Review the remaining SPEC-specific example queries and source-level FP criteria.
+- [ ] Rerun `mvn test`, `mvn "-Dtest=*LiveIT" test` and `mvn clean package` **if source changes after the October 28 verification**; otherwise confirm the commit corresponds to the tested revision.
+- [ ] Review `git status`, `git diff`, tracked files, and team contributions before committing.
+- [ ] Confirm that the final commit is present on the shared GitHub repository.
+- [ ] Generate `cyphail.bundle` from the intended final commit and verify it.
+- [ ] Create and inspect the submission ZIP using the final group-specific filename.
+- [ ] Prepare the live demo and ensure each team member can explain the implementation.
+
+The checklist reflects **verified work to date**; unchecked entries are not claims of completion.
+
+---
+
+## License and Academic Use
+
+Cyphail is an academic project developed for **EIF400 — Programming Paradigms** at the **National University of Costa Rica**.
+
+No additional license is asserted here beyond what is explicitly included in the repository.

@@ -1,3 +1,4 @@
+
 package cr.ac.una.eif400.cyphail.frontend.handler;
 
 import cr.ac.una.eif400.cyphail.ast.Query;
@@ -10,55 +11,113 @@ import cr.ac.una.eif400.cyphail.compiler.parser.CyphailParser;
 import java.util.Objects;
 
 /**
- * Handles the Sprint P1 .tree REPL command.
+ * National University of Costa Rica
+ * School of Informatics
  *
- * <p>The command supports two input forms:</p>
+ * Course: EIF400 - Programming Paradigms
+ * Project: Cyphail
+ * Sprint: P2
+ * Group Code: 04-10am
  *
- * <pre>
- * .tree MATCH (m:Movie) RETURN m.title
- * </pre>
+ * Class: TreeCommandHandler
  *
- * <p>and multiline capture:</p>
+ * Description:
  *
- * <pre>
- * .tree
- * MATCH (m:Movie)
- * RETURN m.title
- * </pre>
+ * Handles the .tree command in the Cyphail REPL.
  *
- * <p>The query is parsed into the Cyphail AST, analyzed semantically
- * and, when valid, rendered by the AST tree visitor. Lexical and
- * syntactic errors are reported directly in the REPL.</p>
+ * The command parses Cyphail statements into an
+ * Abstract Syntax Tree (AST), performs static
+ * semantic analysis, and displays the resulting
+ * tree without executing the query.
  *
- * <p>Undefined-variable problems are reported in English as required
- * by the Sprint P1 specification.</p>
+ * Sprint P2 preserves the AST visualization
+ * functionality introduced in Sprint P1 and
+ * extends it to support node and relationship
+ * patterns, relationship properties, directions,
+ * and graph update statements.
  *
- * <p>Project: Cyphail - Sprint P1<br>
- * Course: EIF400 - Paradigmas de Programacion<br>
- * Universidad Nacional de Costa Rica - Escuela de Informatica<br>
- * Group: 04-10am</p>
+ * Supported input forms:
+ *
+ * 1. Inline query without a semicolon:
+ *
+ *    .tree MATCH (p:Person) RETURN p.name
+ *
+ * 2. Inline query with a semicolon:
+ *
+ *    .tree MATCH (p:Person) RETURN p.name;
+ *
+ * 3. Multiline query:
+ *
+ *    .tree
+ *    MATCH (p:Person)
+ *    WHERE p.age > 18
+ *    RETURN p.name;
+ *
+ * 4. Update statement without RETURN:
+ *
+ *    .tree
+ *    CREATE (p:Person {name: 'Alice'});
+ *
+ * The optional terminating semicolon is removed
+ * before passing the source to the Cyphail parser.
+ *
+ * This ensures compatibility with the semicolon
+ * termination convention introduced in Sprint P2.
+ *
+ * All lexical, syntactic, and semantic errors
+ * are reported in English.
+ *
+ * This handler does not execute queries, modify
+ * graph data, or communicate with the MQI broker.
+ *
+ * Team Members:
+ *
+ * Emmanuel Nunez Jimenez
+ * Valery Alfaro Morales
+ * Roy Arias Mejia
+ * Keynell Molina Mora
+ * Julissa Solano Valverde
  *
  * @author Emmanuel Nunez Jimenez
- * @author Keynell Molina Mora
  * @author Valery Alfaro Morales
- * @author Julissa Solano Valverde
  * @author Roy Arias Mejia
+ * @author Keynell Molina Mora
+ * @author Julissa Solano Valverde
  */
 public final class TreeCommandHandler implements CommandHandler {
 
+    // ============================================
+    // COMMAND CONFIGURATION
+    // ============================================
+
     private static final String TREE_COMMAND = ".tree";
+
+    // ============================================
+    // DEPENDENCIES
+    // ============================================
 
     private final CyphailParser parser;
     private final SemanticAnalyzer analyzer;
     private final AstTreePrinter treePrinter;
+
+    // ============================================
+    // MULTILINE CAPTURE STATE
+    // ============================================
 
     private final StringBuilder queryBuffer =
             new StringBuilder();
 
     private boolean awaitingQuery;
 
+    // ============================================
+    // PRODUCTION CONSTRUCTOR
+    // ============================================
+
     /**
-     * Creates the production .tree handler.
+     * Creates the production tree command handler.
+     *
+     * Initializes the parser, semantic analyzer,
+     * and AST visualization visitor.
      */
     public TreeCommandHandler() {
         this(
@@ -68,12 +127,17 @@ public final class TreeCommandHandler implements CommandHandler {
         );
     }
 
+    // ============================================
+    // DEPENDENCY-INJECTION CONSTRUCTOR
+    // ============================================
+
     /**
-     * Creates a .tree handler with explicit collaborators.
+     * Creates a tree command handler with
+     * explicit collaborators.
      *
-     * @param parser query parser
-     * @param analyzer semantic analyzer
-     * @param treePrinter AST tree visitor
+     * @param parser Cyphail query parser
+     * @param analyzer static semantic analyzer
+     * @param treePrinter AST visualization visitor
      */
     TreeCommandHandler(
             CyphailParser parser,
@@ -96,6 +160,25 @@ public final class TreeCommandHandler implements CommandHandler {
         );
     }
 
+    // ============================================
+    // COMMAND SUPPORT
+    // ============================================
+
+    /**
+     * Determines whether this handler supports
+     * the supplied REPL input.
+     *
+     * The handler accepts the .tree command,
+     * inline .tree queries, and continuation
+     * lines during multiline AST capture.
+     *
+     * The .exit command remains available
+     * while a multiline query is being entered.
+     *
+     * @param input input received from the REPL
+     * @return true if this handler can process
+     *         the supplied input
+     */
     @Override
     public boolean supports(String input) {
         Objects.requireNonNull(
@@ -114,6 +197,21 @@ public final class TreeCommandHandler implements CommandHandler {
                 && !".exit".equalsIgnoreCase(normalized);
     }
 
+    // ============================================
+    // COMMAND EXECUTION
+    // ============================================
+
+    /**
+     * Processes a .tree command or an additional
+     * line of a multiline query.
+     *
+     * Query execution is not performed.
+     * Only parsing, semantic validation,
+     * and AST visualization are supported.
+     *
+     * @param input REPL input
+     * @return true to keep the REPL running
+     */
     @Override
     public boolean handle(String input) {
         Objects.requireNonNull(
@@ -146,15 +244,24 @@ public final class TreeCommandHandler implements CommandHandler {
         return true;
     }
 
+    // ============================================
+    // CAPTURE STATE
+    // ============================================
+
     /**
-     * Indicates whether the handler is currently waiting for
-     * query lines after .tree.
+     * Indicates whether the handler is waiting
+     * for additional lines of a .tree query.
      *
-     * @return true while a .tree query is being captured
+     * @return true while multiline capture
+     *         remains active
      */
     public boolean isAwaitingQuery() {
         return awaitingQuery;
     }
+
+    // ============================================
+    // COMMAND IDENTIFICATION
+    // ============================================
 
     private boolean isTreeCommand(String input) {
         return TREE_COMMAND.equalsIgnoreCase(input);
@@ -182,11 +289,23 @@ public final class TreeCommandHandler implements CommandHandler {
         ).trim();
     }
 
+    // ============================================
+    // MULTILINE CAPTURE
+    // ============================================
+
+    /**
+     * Starts a new multiline AST capture.
+     */
     private void startCapture() {
         queryBuffer.setLength(0);
         awaitingQuery = true;
     }
 
+    /**
+     * Appends a query line to the multiline buffer.
+     *
+     * @param input source line
+     */
     private void appendQueryLine(String input) {
         if (!queryBuffer.isEmpty()) {
             queryBuffer.append(
@@ -197,35 +316,97 @@ public final class TreeCommandHandler implements CommandHandler {
         queryBuffer.append(input);
     }
 
+    // ============================================
+    // INLINE QUERY PROCESSING
+    // ============================================
+
+    /**
+     * Processes a query supplied on the same
+     * line as the .tree command.
+     *
+     * @param source Cyphail source statement
+     */
     private void processInlineQuery(String source) {
         resetCapture();
         processQuery(source, true);
     }
 
+    // ============================================
+    // MULTILINE QUERY PROCESSING
+    // ============================================
+
+    /**
+     * Processes buffered multiline input.
+     *
+     * A trailing semicolon explicitly marks
+     * the end of a Sprint P2 statement.
+     *
+     * For backward compatibility with Sprint P1,
+     * a completed RETURN clause may also trigger
+     * AST visualization without a semicolon.
+     *
+     * @param lastLine most recently entered line
+     */
     private void processBufferedQuery(String lastLine) {
-        boolean finalAttempt =
-                containsReturnClause(queryBuffer.toString())
+
+        String source = queryBuffer.toString();
+
+        boolean terminated =
+                hasTerminatingSemicolon(source);
+
+        boolean completedReturn =
+                containsReturnClause(source)
                         && isLikelyFinalLine(lastLine);
 
+        boolean finalAttempt =
+                terminated || completedReturn;
+
         processQuery(
-                queryBuffer.toString(),
+                source,
                 finalAttempt
         );
     }
 
+    // ============================================
+    // PARSING AND VALIDATION
+    // ============================================
+
+    /**
+     * Parses a Cyphail statement and displays
+     * its AST after semantic validation.
+     *
+     * The optional statement terminator is
+     * removed before invoking the parser.
+     *
+     * @param source original Cyphail source
+     * @param finalAttempt whether the statement
+     *                     should be considered complete
+     */
     private void processQuery(
             String source,
             boolean finalAttempt
     ) {
+        String normalizedSource =
+                removeOptionalTerminatingSemicolon(source);
+
         try {
-            Query query = parser.parseOrThrow(source);
+            Query query =
+                    parser.parseOrThrow(normalizedSource);
 
             /*
-             * In multiline mode MATCH, WHERE and update clauses can
-             * temporarily form a syntactically valid prefix because
-             * RETURN is optional in the AST. The official P1 .tree
-             * cases finish with RETURN, so capture continues until
-             * that clause is available.
+             * Preserve the original Sprint P1
+             * multiline behavior.
+             *
+             * Some partial MATCH or update
+             * statements can be valid prefixes.
+             *
+             * Without an explicit terminator,
+             * capture continues until a complete
+             * RETURN clause is available.
+             *
+             * Sprint P2 statements ending with
+             * a semicolon are processed even
+             * when RETURN is absent.
              */
             if (!finalAttempt
                     && query.returnClause().isEmpty()) {
@@ -234,6 +415,7 @@ public final class TreeCommandHandler implements CommandHandler {
 
             renderQuery(query);
             resetCapture();
+
         } catch (LexerException exception) {
             if (finalAttempt) {
                 reportSyntaxError(
@@ -242,6 +424,7 @@ public final class TreeCommandHandler implements CommandHandler {
 
                 resetCapture();
             }
+
         } catch (IllegalArgumentException exception) {
             if (finalAttempt) {
                 reportSyntaxError(
@@ -253,6 +436,61 @@ public final class TreeCommandHandler implements CommandHandler {
         }
     }
 
+    // ============================================
+    // SEMICOLON HANDLING
+    // ============================================
+
+    /**
+     * Checks whether a statement ends with
+     * a semicolon after trailing whitespace
+     * has been removed.
+     *
+     * @param source Cyphail source
+     * @return true if a semicolon terminates
+     *         the statement
+     */
+    private boolean hasTerminatingSemicolon(
+            String source
+    ) {
+        return source.stripTrailing().endsWith(";");
+    }
+
+    /**
+     * Removes one optional trailing semicolon
+     * before passing the statement to the parser.
+     *
+     * A semicolon occurring elsewhere in the
+     * source is not removed.
+     *
+     * @param source original Cyphail statement
+     * @return statement without its optional
+     *         terminating semicolon
+     */
+    private String removeOptionalTerminatingSemicolon(
+            String source
+    ) {
+        String normalized = source.stripTrailing();
+
+        if (!normalized.endsWith(";")) {
+            return normalized;
+        }
+
+        return normalized.substring(
+                0,
+                normalized.length() - 1
+        ).stripTrailing();
+    }
+
+    // ============================================
+    // AST VISUALIZATION
+    // ============================================
+
+    /**
+     * Performs semantic validation and prints
+     * the AST when no errors are found.
+     *
+     * @param query parsed Cyphail AST
+     */
     private void renderQuery(Query query) {
         SemanticAnalysisResult analysis =
                 analyzer.analyze(query);
@@ -270,12 +508,30 @@ public final class TreeCommandHandler implements CommandHandler {
         );
     }
 
+    // ============================================
+    // MULTILINE COMPLETION DETECTION
+    // ============================================
+
+    /**
+     * Detects whether the buffered source
+     * contains a RETURN clause.
+     *
+     * @param source buffered query text
+     * @return true if RETURN is present
+     */
     private boolean containsReturnClause(String source) {
         return source.matches(
                 "(?is).*\\bRETURN\\b.*"
         );
     }
 
+    /**
+     * Determines whether the most recent line
+     * appears to complete a RETURN statement.
+     *
+     * @param line most recently entered line
+     * @return true when the line appears complete
+     */
     private boolean isLikelyFinalLine(String line) {
         String normalized = line.trim();
 
@@ -290,12 +546,29 @@ public final class TreeCommandHandler implements CommandHandler {
         return !normalized.endsWith(",");
     }
 
+    // ============================================
+    // ERROR REPORTING
+    // ============================================
+
+    /**
+     * Prints a syntax error in English.
+     *
+     * @param message detailed parser error
+     */
     private void reportSyntaxError(String message) {
         System.out.println(
                 "Syntax error: " + message
         );
     }
 
+    // ============================================
+    // CAPTURE RESET
+    // ============================================
+
+    /**
+     * Clears the multiline buffer and exits
+     * AST capture mode.
+     */
     private void resetCapture() {
         queryBuffer.setLength(0);
         awaitingQuery = false;

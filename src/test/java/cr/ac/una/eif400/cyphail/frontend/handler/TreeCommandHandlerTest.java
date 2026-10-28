@@ -1,3 +1,4 @@
+
 package cr.ac.una.eif400.cyphail.frontend.handler;
 
 import org.junit.jupiter.api.AfterEach;
@@ -11,31 +12,72 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Unit tests for the Sprint P1 .tree command handler.
+ * National University of Costa Rica
+ * School of Informatics
  *
- * <p>The tests verify tree capture mode, inline and multiline query
- * processing, AST rendering, syntax error recovery and semantic
- * error reporting for undefined variables.</p>
+ * Course: EIF400 - Programming Paradigms
+ * Project: Cyphail
+ * Sprint: P2
+ * Group Code: 04-10am
  *
- * <p>Project: Cyphail</p>
- * <p>Course: EIF400 - Paradigmas de Programacion</p>
- * <p>Universidad Nacional de Costa Rica - Escuela de Informatica</p>
- * <p>Group Code: 04-10am</p>
+ * Class: TreeCommandHandlerTest
  *
- * <p>Authors:</p>
- * <ul>
- *     <li>Emmanuel Nunez Jimenez</li>
- *     <li>Valery Alfaro Morales</li>
- *     <li>Roy Arias Mejia</li>
- *     <li>Keynell Molina Mora</li>
- *     <li>Julissa Solano Valverde</li>
- * </ul>
+ * Description:
+ *
+ * Unit and regression tests for the .tree
+ * command handler in the Cyphail REPL.
+ *
+ * These tests preserve Sprint P1 behavior
+ * while verifying the additional functionality
+ * introduced in Sprint P2.
+ *
+ * The test suite covers:
+ *
+ * 1. Activation of multiline tree capture.
+ * 2. Multiline AST visualization.
+ * 3. Undefined-variable semantic errors.
+ * 4. Variables used before declaration.
+ * 5. Inline AST visualization.
+ * 6. Syntax error reporting and recovery.
+ * 7. Inline queries terminated with semicolons.
+ * 8. Multiline queries terminated with semicolons.
+ * 9. Relationship patterns and properties.
+ * 10. CREATE statements without RETURN.
+ * 11. Syntax errors with statement terminators.
+ *
+ * AST visualization must not execute queries
+ * or modify graph data.
+ *
+ * Team Members:
+ *
+ * Emmanuel Nunez Jimenez
+ * Valery Alfaro Morales
+ * Roy Arias Mejia
+ * Keynell Molina Mora
+ * Julissa Solano Valverde
+ *
+ * @author Emmanuel Nunez Jimenez
+ * @author Valery Alfaro Morales
+ * @author Roy Arias Mejia
+ * @author Keynell Molina Mora
+ * @author Julissa Solano Valverde
  */
 class TreeCommandHandlerTest {
+
+    // ============================================
+    // TEST OUTPUT CAPTURE
+    // ============================================
 
     private PrintStream originalOut;
     private ByteArrayOutputStream output;
 
+    // ============================================
+    // TEST SETUP
+    // ============================================
+
+    /**
+     * Redirects standard output before each test.
+     */
     @BeforeEach
     void setUp() {
         originalOut = System.out;
@@ -46,11 +88,28 @@ class TreeCommandHandlerTest {
         );
     }
 
+    // ============================================
+    // TEST CLEANUP
+    // ============================================
+
+    /**
+     * Restores standard output after each test.
+     */
     @AfterEach
     void tearDown() {
         System.setOut(originalOut);
     }
 
+    // ============================================
+    // ORIGINAL SPRINT P1 REGRESSION TESTS
+    // ============================================
+
+    /**
+     * Verifies that .tree starts multiline
+     * query capture mode.
+     *
+     * The .exit command must remain available.
+     */
     @Test
     void shouldActivateTreeCaptureMode() {
         TreeCommandHandler handler =
@@ -77,6 +136,12 @@ class TreeCommandHandlerTest {
         );
     }
 
+    /**
+     * Verifies multiline AST rendering without
+     * requiring a terminating semicolon.
+     *
+     * This preserves the original P1 behavior.
+     */
     @Test
     void shouldPrintTreeForMultilineQuery() {
         TreeCommandHandler handler =
@@ -133,6 +198,12 @@ class TreeCommandHandlerTest {
         );
     }
 
+    /**
+     * Verifies semantic error reporting for
+     * undefined variables in WHERE and RETURN.
+     *
+     * Preserves the official Sprint P1 case 10.
+     */
     @Test
     void shouldReportUndefinedVariableFromOfficialCase10() {
         TreeCommandHandler handler =
@@ -179,6 +250,13 @@ class TreeCommandHandlerTest {
         );
     }
 
+    /**
+     * Verifies semantic validation when
+     * a variable is referenced before
+     * its declaration.
+     *
+     * Preserves the official Sprint P1 case 11.
+     */
     @Test
     void shouldReportVariableUsedBeforeDeclarationFromOfficialCase11() {
         TreeCommandHandler handler =
@@ -227,6 +305,10 @@ class TreeCommandHandlerTest {
         );
     }
 
+    /**
+     * Verifies inline AST visualization
+     * without a terminating semicolon.
+     */
     @Test
     void shouldPrintTreeForInlineQuery() {
         TreeCommandHandler handler =
@@ -273,6 +355,11 @@ class TreeCommandHandlerTest {
         );
     }
 
+    /**
+     * Verifies that malformed inline queries
+     * produce a syntax error and reset
+     * the capture state.
+     */
     @Test
     void shouldReportSyntaxErrorAndResetAfterInlineQuery() {
         TreeCommandHandler handler =
@@ -292,6 +379,263 @@ class TreeCommandHandlerTest {
                 result.contains(
                         "Expected RIGHT_PAREN"
                 )
+        );
+
+        assertFalse(
+                handler.isAwaitingQuery()
+        );
+    }
+
+    // ============================================
+    // NEW SPRINT P2 REGRESSION TESTS
+    // ============================================
+
+    /**
+     * Verifies that an inline .tree query
+     * accepts a trailing semicolon.
+     *
+     * Also verifies Sprint P2 relationship
+     * patterns, directions, and properties.
+     *
+     * This prevents regression of the original
+     * "Unexpected character ';'" error.
+     */
+    @Test
+    void shouldPrintTreeForInlineQueryWithSemicolon() {
+        TreeCommandHandler handler =
+                new TreeCommandHandler();
+
+        String command =
+                ".tree MATCH (a:Persona)"
+                        + "-[r:TRABAJA_EN {rol: 'Dev'}]->"
+                        + "(e:Empresa) "
+                        + "RETURN a.nombre, r.rol, e.nombre;";
+
+        assertTrue(
+                handler.supports(command)
+        );
+
+        handler.handle(command);
+
+        String result = output.toString();
+
+        assertTrue(
+                result.contains("Query{")
+        );
+
+        assertTrue(
+                result.contains("Match:{")
+        );
+
+        assertTrue(
+                result.contains("PatternRelationship:{")
+        );
+
+        assertTrue(
+                result.contains("types: [TRABAJA_EN]")
+        );
+
+        assertTrue(
+                result.contains("direction: OUT")
+        );
+
+        assertTrue(
+                result.contains("rol: \"Dev\"")
+        );
+
+        assertTrue(
+                result.contains("{(. a nombre)}")
+        );
+
+        assertTrue(
+                result.contains("{(. r rol)}")
+        );
+
+        assertTrue(
+                result.contains("{(. e nombre)}")
+        );
+
+        assertFalse(
+                result.contains("Syntax error:")
+        );
+
+        assertFalse(
+                handler.isAwaitingQuery()
+        );
+    }
+
+    /**
+     * Verifies that multiline .tree input
+     * accepts a semicolon at the end
+     * of the RETURN clause.
+     *
+     * The handler must wait until the
+     * complete query is available.
+     */
+    @Test
+    void shouldPrintTreeForMultilineQueryWithSemicolon() {
+        TreeCommandHandler handler =
+                new TreeCommandHandler();
+
+        handler.handle(".tree");
+
+        assertTrue(
+                handler.isAwaitingQuery()
+        );
+
+        handler.handle(
+                "MATCH (p:Persona)"
+        );
+
+        assertTrue(
+                handler.isAwaitingQuery()
+        );
+
+        handler.handle(
+                "RETURN p.nombre;"
+        );
+
+        String result = output.toString();
+
+        assertTrue(
+                result.contains("Query{")
+        );
+
+        assertTrue(
+                result.contains("Match:{")
+        );
+
+        assertTrue(
+                result.contains("labels: [Persona]")
+        );
+
+        assertTrue(
+                result.contains("{(. p nombre)}")
+        );
+
+        assertFalse(
+                result.contains("Syntax error:")
+        );
+
+        assertFalse(
+                handler.isAwaitingQuery()
+        );
+    }
+
+    /**
+     * Verifies that a CREATE statement
+     * without RETURN is supported
+     * in inline .tree mode.
+     *
+     * Sprint P2 allows update statements
+     * to terminate with a semicolon.
+     */
+    @Test
+    void shouldPrintTreeForInlineCreateWithoutReturn() {
+        TreeCommandHandler handler =
+                new TreeCommandHandler();
+
+        handler.handle(
+                ".tree CREATE "
+                        + "(p:Person {name: 'Alice'});"
+        );
+
+        String result = output.toString();
+
+        assertTrue(
+                result.contains("Query{")
+        );
+
+        assertTrue(
+                result.contains("Updates:[")
+        );
+
+        assertFalse(
+                result.contains("Syntax error:")
+        );
+
+        assertFalse(
+                handler.isAwaitingQuery()
+        );
+    }
+
+    /**
+     * Verifies that an update statement
+     * without RETURN is not rendered
+     * before its terminating semicolon.
+     *
+     * The semicolon is then supplied
+     * as an additional input line.
+     */
+    @Test
+    void shouldWaitForSemicolonBeforeRenderingUpdateWithoutReturn() {
+        TreeCommandHandler handler =
+                new TreeCommandHandler();
+
+        handler.handle(".tree");
+
+        handler.handle(
+                "CREATE (p:Person {name: 'Alice'})"
+        );
+
+        assertTrue(
+                handler.isAwaitingQuery()
+        );
+
+        assertFalse(
+                output.toString().contains("Query{")
+        );
+
+        handler.handle(";");
+
+        String result = output.toString();
+
+        assertTrue(
+                result.contains("Query{")
+        );
+
+        assertTrue(
+                result.contains("Updates:[")
+        );
+
+        assertFalse(
+                result.contains("Syntax error:")
+        );
+
+        assertFalse(
+                handler.isAwaitingQuery()
+        );
+    }
+
+    /**
+     * Verifies that a malformed inline
+     * query still reports a syntax error
+     * when terminated by a semicolon.
+     *
+     * Removing the optional semicolon
+     * must not hide actual syntax errors.
+     */
+    @Test
+    void shouldReportSyntaxErrorForSemicolonTerminatedInlineQuery() {
+        TreeCommandHandler handler =
+                new TreeCommandHandler();
+
+        handler.handle(
+                ".tree MATCH (m:Movie RETURN m.title;"
+        );
+
+        String result = output.toString();
+
+        assertTrue(
+                result.contains("Syntax error:")
+        );
+
+        assertTrue(
+                result.contains("Expected RIGHT_PAREN")
+        );
+
+        assertFalse(
+                result.contains("Query{")
         );
 
         assertFalse(
