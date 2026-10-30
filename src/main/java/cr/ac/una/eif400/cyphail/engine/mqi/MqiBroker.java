@@ -51,6 +51,19 @@ import java.util.concurrent.TimeoutException;
  * Added bounded connection retries to handle
  * intermittent connection-refused errors
  * during SWI-Prolog MQI startup.
+ *
+ * Authors:
+ * Emmanuel Nunez Jimenez
+ * Valery Alfaro Morales
+ * Roy Arias Mejia
+ * Keynell Molina Mora
+ * Julissa Solano Valverde
+ *
+ * @author Emmanuel Nunez Jimenez
+ * @author Valery Alfaro Morales
+ * @author Roy Arias Mejia
+ * @author Keynell Molina Mora
+ * @author Julissa Solano Valverde
  */
 public final class MqiBroker implements AutoCloseable {
 
