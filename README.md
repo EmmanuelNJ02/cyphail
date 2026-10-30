@@ -5,7 +5,7 @@ Cyphail is an academic prototype of a graph query language developed for **EIF40
 
 Sprint P2 extends the Sprint P1 lexer, functional parser combinators, abstract syntax tree (AST), semantic analyzer, and command-line interface. Its main change is the replacement of simulated query execution with a **real SWI-Prolog engine accessed through the Machine Query Interface (MQI)**.
 
-This README documents the Sprint P2 implementation for the **November 2026** project phase: architecture, setup, execution, tests, verified behavior, and remaining steps before submission. The most recent documented Maven verification took place on **October 28, 2026** in the team's Windows environment. If the source changes afterward, rerun the relevant checks before submitting.
+This README documents the Sprint P2 implementation for the **November 2026** project phase: architecture, setup, execution, tests, verified behavior, and remaining steps before submission. The most recent documented Maven verification took place on **October 29, 2026** in the team's Windows environment. If the source changes afterward, rerun the relevant checks before submitting.
 
 ---
 
@@ -25,7 +25,7 @@ This README documents the Sprint P2 implementation for the **November 2026** pro
 | Query execution engine | SWI-Prolog through MQI |
 | Academic term | Second semester, 2026 |
 | Project presentation month | November 2026 |
-| Last documented verification | October 28, 2026 (409 standard tests, 58 real MQI integration tests, clean package) |
+| Last documented verification | October 29, 2026 (419 standard tests, 62 real MQI integration tests, clean package) |
 
 ## Team Members
 
@@ -206,6 +206,15 @@ The semantic analyzer validates variable declarations, uses, and role restrictio
 
 The query lifecycle uses Prolog's `setup_call_cleanup/3` so that temporary generated query clauses are erased even when execution raises an exception. The cleanup behavior was tested directly in SWI-Prolog and protected by code-generation unit tests.
 
+### October 29 CodeGen Regression Fixes
+
+Two compatibility and correctness fixes were tested in the current local revision:
+
+1. **Distinct physical relationships:** when a `MATCH` contains multiple relationship occurrences, CodeGen emits pairwise `cy_neq/2` checks between their physical edge IDs. This applies to named, anonymous, and chained relationship patterns; repeated node variables remain valid joins. The behavior is covered by six `PrologCodeGeneratorDistinctEdgesTest` unit tests and three `PrologDistinctEdgesMqiLiveIT` real-MQI tests.
+2. **Property references in MATCH patterns:** a pattern property value such as `personId: p.id` may reference a property of an earlier `MATCH` variable. CodeGen now resolves the reference through `visitPropertyExpression` while preserving literal handling. This is covered by four `PrologCodeGeneratorMatchPropertyReferenceTest` unit tests and one `PrologMatchPropertyReferenceMqiLiveIT` real-MQI test.
+
+These fixes passed both the standard and real-MQI suites. The modified production files were reviewed with `git diff` on October 29, 2026. Testing does not mean that the local changes have already been committed or merged.
+
 ### MQI Broker and Engine
 
 `MqiBroker` launches SWI-Prolog and establishes communication over a socket using MQI. The REPL reuses the broker during the session and closes it when the session ends. The engine executes the generated goals and returns JSON-formatted MQI responses.
@@ -250,9 +259,9 @@ A successful Maven build ends with:
 BUILD SUCCESS
 ```
 
-**Verified on October 28, 2026:** `mvn clean package` completed with `BUILD SUCCESS`, compiled **86 production Java files** and **63 test Java files**, passed **409 standard tests** (zero failures, errors, or skips), and generated the shaded JAR `target\cyphail-0.1.0.jar`.
+**Verified on October 29, 2026:** `mvn clean package` completed with `BUILD SUCCESS`, compiled **86 production Java files** and **67 test Java files**, passed **419 standard tests** (zero failures, errors, or skips), and generated the shaded JAR `target\cyphail-0.1.0.jar`.
 
-The separate `mvn "-Dtest=*LiveIT" test` run also completed with `BUILD SUCCESS`, passing **58 real MQI integration tests**.
+The separate `mvn "-Dtest=*LiveIT" test` run also completed with `BUILD SUCCESS`, passing **62 real MQI integration tests**.
 
 These results describe the source revision tested on that date. Rerun the checks after any subsequent source changes.
 
@@ -338,7 +347,7 @@ The `.tree` commands inspect queries; they do not mutate the Prolog graph.
 
 **Command review on October 27, 2026:** the current `HelpCommandHandler.java` source lists `.load` and the other commands above, while `.about` was executed manually and displayed the P2 information, November 2026 date, and all five team members.
 
-A direct interactive `.help` output check can be included in the final smoke test.
+A direct interactive `.help` output check can be included in the final smoke test. The packaged JAR CLI `--help` was verified on October 29, 2026; this is distinct from the interactive REPL `.help` command.
 
 ### `.use` and the Legacy Graph Catalog
 
@@ -543,6 +552,24 @@ MATCH (a:ExampleRelationP2 {name: 'Source'})
 DETACH DELETE a;
 ```
 
+### 15. Match Using a Previously Declared Property
+
+The following example demonstrates a Sprint P1 property-reference parsing case now supported by the P2 CodeGen and engine. Run these statements in the same REPL session:
+
+```cypher
+CREATE (p:Person {id: 202610298761, name: 'MatchReferenceP2'})
+RETURN p;
+
+CREATE (o:Order {personId: 202610298761, total: 150})
+RETURN o;
+
+MATCH (p:Person {id: 202610298761}),
+      (o:Order {personId: p.id})
+RETURN p.name, o.total;
+```
+
+The corresponding real-MQI integration test also creates an unrelated order with `personId: 202610298762` and verifies that it is not returned. Prolog's tabular representation may quote string atoms, such as `'MatchReferenceP2'`.
+
 These statements are intended to be executed against the real MQI-connected engine.
 
 Their results are not read from prerecorded JSON response files.
@@ -746,25 +773,27 @@ The following command runs the main frontend integration test classes:
 mvn "-Dtest=CommandRouterIntegrationTest,ReplIntegrationTest,ReplLoadIntegrationTest,ReplMultilineIntegrationTest,PrologQueryHandlerIntegrationTest" test
 ```
 
-### Last Verified Results — October 28, 2026
+### Last Verified Results — October 29, 2026
 
 | Command / suite | Tests | Failures | Errors | Skipped | Outcome |
 |---|---:|---:|---:|---:|---|
-| `mvn test` (standard suite) | 409 | 0 | 0 | 0 | BUILD SUCCESS |
-| `mvn "-Dtest=*LiveIT" test` (real MQI suite) | 58 | 0 | 0 | 0 | BUILD SUCCESS |
-| `mvn clean package` (clean build and standard suite) | 409 | 0 | 0 | 0 | BUILD SUCCESS; shaded JAR created |
+| `mvn test` (standard suite) | 419 | 0 | 0 | 0 | BUILD SUCCESS |
+| `mvn "-Dtest=*LiveIT" test` (real MQI suite) | 62 | 0 | 0 | 0 | BUILD SUCCESS |
+| `mvn clean package` (clean build and standard suite) | 419 | 0 | 0 | 0 | BUILD SUCCESS; shaded JAR created |
 
-The **409 standard tests** and **58 live-MQI tests** were executed in separate runs and must not be described as one Maven invocation.
+The **419 standard tests** and **62 live-MQI tests** were executed in separate runs and must not be described as one Maven invocation.
+
+**Combined count across the two separately executed suites: 481 passing tests.** The 62 `*LiveIT` tests are not automatically included in `mvn test` or `mvn clean package`.
 
 The real-MQI suite covers CodeGen, CREATE, SET, REMOVE, DELETE, WHERE logic, graph storage and MQI connections.
 
 Regression tests verify `SET` on original Prolog relationships and `MATCH + CREATE` between original nodes or between original and newly created nodes.
 
-The five tests in `PrologQueryHandlerIntegrationTest` are included in the 409-test standard suite.
+The five tests in `PrologQueryHandlerIntegrationTest` and the four `PrologCodeGeneratorMatchPropertyReferenceTest` cases are included in the 419-test standard suite.
 
-The clean package result and both test-suite results are valid for the source revision verified on **October 28, 2026**.
+The clean package result and both test-suite results are valid for the source revision verified on **October 29, 2026**.
 
-They do not automatically verify future code changes or an uncommitted final revision.
+They do not automatically verify future code changes or establish that this tested worktree has been committed and pushed to GitHub.
 
 **Before the final commit:** audit the remaining SPEC requirements and review the Git diff. If any production or test source changes, repeat the clean build and both test suites, and confirm that the submitted Git commit matches the verified code.
 
@@ -808,9 +837,10 @@ The following distinctions and remaining checks are important:
 - **Legacy behavior:** `.use` reads `data/graphs.json`; it does not switch the active graph inside SWI-Prolog.
 - **Verified: launcher path handling.** `cyphail.bat repl` runs from the project root or a different current directory when the repository structure is available.
 - **Not verified: fully independent JAR.** The JAR still relies on the external project-relative Prolog source file unless packaging is explicitly extended and tested.
-- **Verified: clean Maven build.** After an earlier Windows file-lock issue, `mvn clean package` completed successfully again on October 28, 2026, with 409 standard tests and a shaded JAR.
+- **Outside the currently implemented CodeGen scope:** although the parser recognizes `RETURN DISTINCT`, `RETURN *`, `ORDER BY`, `SKIP` and `LIMIT`, execution currently rejects these constructs. They are not listed as mandatory execution features in the available Sprint P2 SPEC or historical P1 required-query list.
+- **Verified: clean Maven build.** On October 29, 2026, `mvn clean package` compiled 86 production and 67 test Java sources, passed 419 standard tests, and generated the shaded JAR. `java -jar target\cyphail-0.1.0.jar --help` also executed successfully.
 - **Verified regressions:** original graph relationship updates through `SET` and relationships created by `MATCH + CREATE` between original sample nodes or mixed original/new nodes passed live MQI integration tests.
-- **Final audit needed:** check every P2 SPEC example and edge condition, P1 behavior, `RETURN` ID semantics for relationships, source-level functional programming requirements, and any remaining legacy user-facing messages.
+- **Final audit needed:** confirm any remaining exact P2 SPEC examples and Sprint P1 compatibility edge cases. The parser was reviewed for functional combinators (`map`, `flatMap`, `many`, `optional`), and the REPL dispatch uses `statements.stream().allMatch(commandRouter::route)`; this is implementation evidence rather than a guarantee about the instructor's final assessment.
 - **Final regression if code changes:** rerun both test suites and `mvn clean package` after any additional source changes. Then confirm that the final JAR, README, Git history, bundle, and ZIP are consistent.
 
 Successful tests are evidence of the cases exercised, not proof that every possible query or deployment environment is covered.
@@ -831,7 +861,7 @@ Successful tests are evidence of the cases exercised, not proof that every possi
 
 The parser uses functional parser combinators, and the REPL uses Java stream operations to dispatch complete statements.
 
-These implementation choices still need to be checked against the final wording of the professor's functional-programming requirements; passing tests alone does not establish complete SPEC compliance.
+The parser's `map`, `flatMap`, `Parsers.many` and `Parsers.optional` usage, together with the REPL's `statements.stream().allMatch(commandRouter::route)`, were inspected on October 29, 2026. These are source-level examples of functional-programming constructs; passing tests alone does not establish complete SPEC compliance.
 
 ---
 
@@ -892,16 +922,19 @@ The instructor also expects evidence of ongoing Git contributions from all team 
 
 Complete these checks before treating the repository as ready for submission:
 
-- [x] A clean Maven package completed on October 28, 2026, and generated the shaded JAR (409 standard tests).
-- [x] General test suite passed (409 tests; zero failures, errors, or skips).
-- [x] Live MQI suite passed (58 tests; zero failures, errors, or skips).
+- [x] A clean Maven package completed on October 29, 2026, and generated the shaded JAR (419 standard tests).
+- [x] General test suite passed (419 tests; zero failures, errors, or skips).
+- [x] Live MQI suite passed (62 tests; zero failures, errors, or skips).
 - [x] JAR started from the repository root; `.about` and `.exit` were verified.
 - [x] Windows launcher started from another directory; real `CREATE` and `MATCH` shared session state.
 - [x] Live MQI regression tests passed for SET on original relationships and CREATE involving original nodes.
 - [x] Five `PrologQueryHandlerIntegrationTest` cases passed, including rejection of a duplicated relationship variable.
-- [ ] Review the remaining SPEC-specific example queries and source-level FP criteria.
-- [ ] Rerun `mvn test`, `mvn "-Dtest=*LiveIT" test` and `mvn clean package` **if source changes after the October 28 verification**; otherwise confirm the commit corresponds to the tested revision.
-- [ ] Review `git status`, `git diff`, tracked files, and team contributions before committing.
+- [x] Reviewed the parser combinators (`map`, `flatMap`, `many`, `optional`) and the REPL's functional statement dispatch.
+- [x] Reviewed the production-file diff for `PrologCodeGenerator.java` and `MqiBroker.java`; no unexpected production-code changes were found.
+- [x] Re-ran `mvn test`, `mvn "-Dtest=*LiveIT" test`, `mvn clean package`, and the JAR `--help` command on October 29, 2026.
+- [ ] Verify any remaining exact SPEC example queries and Sprint P1 compatibility edge cases.
+- [ ] If Java or Prolog source code changes after this verification, rerun both test suites and the clean package.
+- [ ] Review all untracked files and the five team members' contribution history before committing.
 - [ ] Confirm that the final commit is present on the shared GitHub repository.
 - [ ] Generate `cyphail.bundle` from the intended final commit and verify it.
 - [ ] Create and inspect the submission ZIP using the final group-specific filename.

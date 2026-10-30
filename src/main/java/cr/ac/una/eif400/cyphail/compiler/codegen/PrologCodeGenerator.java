@@ -399,6 +399,10 @@ public final class PrologCodeGenerator {
                     "Pattern cannot be null"
             );
 
+            // Track physical edge IDs throughout this MATCH clause.
+            // Distinct relationship occurrences must not share an edge.
+            List<String> usedRelationshipIds = new ArrayList<>();
+
             for (PatternPath path : pattern.paths()) {
 
                 String leftNodeId =
@@ -425,6 +429,25 @@ public final class PrologCodeGenerator {
                     goals.addAll(
                             generated.goals()
                     );
+
+                    /*
+                     * Sprint P2: forbid reusing one physical edge
+                     * for different relationship occurrences.
+                     * Covers named, anonymous and chained patterns.
+                     */
+                    String currentRelationshipId = generated.variable();
+
+                    for (String previousRelationshipId : usedRelationshipIds) {
+                        goals.add(
+                                "cy_neq("
+                                        + previousRelationshipId
+                                        + ", "
+                                        + currentRelationshipId
+                                        + ")"
+                        );
+                    }
+
+                    usedRelationshipIds.add(currentRelationshipId);
 
                     /**
                      * Register variables introduced
@@ -545,13 +568,31 @@ public final class PrologCodeGenerator {
                                 + ")"
                 );
 
+                /*
+                 * Pattern properties can reference a property
+                 * of an earlier MATCH variable, such as p.id.
+                 * Keep literal handling unchanged.
+                 */
+                String expectedValue;
+
+                if (property.value()
+                        instanceof PropertyExpression reference) {
+
+                    expectedValue =
+                            visitPropertyExpression(reference);
+
+                } else {
+
+                    expectedValue = literalTerm(
+                            property.value()
+                    );
+                }
+
                 goals.add(
                         "cy_eq("
                                 + propertyValue
                                 + ", "
-                                + literalTerm(
-                                        property.value()
-                                )
+                                + expectedValue
                                 + ")"
                 );
 
