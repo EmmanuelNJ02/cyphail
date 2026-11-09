@@ -55,7 +55,10 @@ public final class CyphailLexer {
             Map.entry("IS", TokenType.IS),
             Map.entry("NULL", TokenType.NULL),
             Map.entry("TRUE", TokenType.TRUE),
-            Map.entry("FALSE", TokenType.FALSE)
+            Map.entry("FALSE", TokenType.FALSE),
+            Map.entry("true", TokenType.TRUE),
+            Map.entry("false", TokenType.FALSE)
+
     );
 
     /**

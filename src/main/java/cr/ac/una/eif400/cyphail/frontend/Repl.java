@@ -1,5 +1,6 @@
-
 package cr.ac.una.eif400.cyphail.frontend;
+
+import cr.ac.una.eif400.cyphail.compiler.parser.CyphailParser;
 
 import java.util.List;
 import java.util.Objects;
@@ -26,7 +27,7 @@ import java.util.Scanner;
  *
  * 1. Existing REPL commands.
  * 2. Multiline Cyphail statements.
- * 3. Semicolon-terminated queries.
+ * 3. Semicolon-terminated queries and optional blank-line or EOF completion.
  * 4. AST visualization through .tree.
  * 5. Loading .cyphail source files.
  * 6. Real query execution through SWI-Prolog/MQI.
@@ -78,7 +79,7 @@ public class Repl {
 
     /**
      * Collects multiline Cyphail statements
-     * until their terminating semicolon.
+     * until a semicolon, a blank line, or the end of input.
      */
     private final CyphailStatementBuffer statementBuffer;
 
@@ -145,7 +146,7 @@ public class Repl {
 
                 if (!scanner.hasNextLine()) {
 
-                    reportIncompleteStatement();
+                    finishPendingStatementAtEndOfInput();
 
                     break;
                 }
@@ -168,7 +169,7 @@ public class Repl {
      * when there is no pending statement.
      *
      * Cyphail statements are collected until
-     * their terminating semicolon is received.
+     * a semicolon or an explicit blank-line completion.
      *
      * AST visualization is delegated to the
      * dedicated .tree command handler.
@@ -227,6 +228,32 @@ public class Repl {
         }
 
         // ----------------------------------------
+        // OPTIONAL SEMICOLON
+        // ----------------------------------------
+
+        /*
+         * A blank line can complete a buffered query
+         * without requiring a semicolon. We validate
+         * its syntax before dispatching it so that
+         * incomplete multiline queries can continue.
+         */
+        if (normalized.isEmpty()
+                && statementBuffer.hasPendingStatement()) {
+
+            String source =
+                    statementBuffer.pendingSource().trim();
+
+            if (isSyntacticallyComplete(source)) {
+
+                statementBuffer.reset();
+
+                return dispatchStatements(
+                        List.of(source)
+                );
+            }
+        }
+
+        // ----------------------------------------
         // IGNORE EMPTY INPUT
         // ----------------------------------------
 
@@ -282,6 +309,32 @@ public class Repl {
 
         return statements.stream()
                 .allMatch(commandRouter::route);
+    }
+
+    // ============================================
+    // STATEMENT SYNTAX VALIDATION
+    // ============================================
+
+    /**
+     * Checks whether a buffered statement is syntactically complete.
+     * Semantic validation and execution remain the responsibility
+     * of the configured query handler.
+     *
+     * @param source buffered Cyphail source
+     * @return true if the parser accepts the complete statement
+     */
+    private boolean isSyntacticallyComplete(String source) {
+
+        try {
+
+            new CyphailParser().parseOrThrow(source);
+
+            return true;
+
+        } catch (IllegalArgumentException exception) {
+
+            return false;
+        }
     }
 
     // ============================================
@@ -365,21 +418,34 @@ public class Repl {
     }
 
     // ============================================
-    // INCOMPLETE STATEMENT REPORTING
+    // END-OF-INPUT HANDLING
     // ============================================
 
     /**
-     * Reports incomplete Cyphail input
-     * when the input stream ends before
-     * a terminating semicolon.
+     * Executes a syntactically complete pending statement when
+     * the input stream ends, even if it has no final semicolon.
+     * Keeps incomplete statements from being sent to the engine.
      */
-    private void reportIncompleteStatement() {
+    private void finishPendingStatementAtEndOfInput() {
 
-        if (statementBuffer.hasPendingStatement()) {
+        if (!statementBuffer.hasPendingStatement()) {
+
+            return;
+        }
+
+        String source = statementBuffer.pendingSource().trim();
+
+        statementBuffer.reset();
+
+        if (isSyntacticallyComplete(source)) {
+
+            dispatchStatements(List.of(source));
+
+        } else {
 
             System.out.println(
                     "Incomplete Cyphail statement: "
-                            + "expected ';' before end of input."
+                            + "input ended before a valid statement was completed."
             );
         }
     }

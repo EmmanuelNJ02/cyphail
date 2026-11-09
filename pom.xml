@@ -18,7 +18,7 @@
     </description>
 
     <properties>
-        <maven.compiler.release>26</maven.compiler.release>
+        <maven.compiler.release>21</maven.compiler.release>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -37,7 +37,7 @@
             <version>${picocli.version}</version>
         </dependency>
 
-        <!-- JSON handling for fake broker data stored on disk -->
+        <!-- JSON handling for SWI-Prolog MQI responses -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
@@ -58,7 +58,7 @@
 
         <plugins>
 
-            <!-- Compile the project using Java 26 -->
+            <!-- Compile the project targeting Java 21 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

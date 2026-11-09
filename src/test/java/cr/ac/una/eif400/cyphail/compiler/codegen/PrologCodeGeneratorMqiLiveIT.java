@@ -1,4 +1,3 @@
-
 package cr.ac.una.eif400.cyphail.compiler.codegen;
 
 import cr.ac.una.eif400.cyphail.ast.Query;
@@ -10,7 +9,10 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -45,6 +47,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * - WHERE property-to-property comparisons.
  * - Property reuse between WHERE and RETURN.
  * - WHERE filters producing no matching rows.
+ * - Node-variable joins with repeated labels.
+ * - Node-variable joins with incompatible labels.
+ * - Node-variable joins with two distinct labels.
  *
  * Requirements:
  * - SWI-Prolog available through PATH.
@@ -61,6 +66,10 @@ class PrologCodeGeneratorMqiLiveIT {
 
     private final PrologCodeGenerator generator =
             new PrologCodeGenerator();
+
+    // =====================================================
+    // HELPER - ENGINE PATH
+    // =====================================================
 
     /**
      * Returns the absolute path of the real
@@ -83,6 +92,10 @@ class PrologCodeGeneratorMqiLiveIT {
         return path;
     }
 
+    // =====================================================
+    // HELPER - COMPILE CYPHAIL QUERY
+    // =====================================================
+
     /**
      * Parses Cyphail source and compiles it into
      * an executable Prolog goal.
@@ -100,6 +113,10 @@ class PrologCodeGeneratorMqiLiveIT {
 
         return result.goal();
     }
+
+    // =====================================================
+    // HELPER - EXECUTE REAL MQI QUERY
+    // =====================================================
 
     /**
      * Executes a generated goal using the real
@@ -146,7 +163,7 @@ class PrologCodeGeneratorMqiLiveIT {
     }
 
     // =====================================================
-    // EXISTING MATCH INTEGRATION TESTS
+    // TEST 1 - MATCH WITH ISOLATED NODES
     // =====================================================
 
     /**
@@ -156,12 +173,10 @@ class PrologCodeGeneratorMqiLiveIT {
     void shouldExecuteGeneratedNodeQuery()
             throws Exception {
 
-        String goal = compile(
-                """
+        String goal = compile("""
                 MATCH (a:Person)
                 RETURN a.name AS nombre
-                """
-        );
+                """);
 
         try (MqiBroker broker =
                      MqiBroker.start(enginePath())) {
@@ -185,6 +200,10 @@ class PrologCodeGeneratorMqiLiveIT {
         }
     }
 
+    // =====================================================
+    // TEST 2 - OUTGOING RELATIONSHIP
+    // =====================================================
+
     /**
      * Verifies outgoing relationship matching.
      */
@@ -192,14 +211,12 @@ class PrologCodeGeneratorMqiLiveIT {
     void shouldExecuteGeneratedOutgoingRelationship()
             throws Exception {
 
-        String goal = compile(
-                """
+        String goal = compile("""
                 MATCH (a:Person)-[r:Amigo]->(b:Person)
                 RETURN a.name AS origen,
                        r AS relacion,
                        b.name AS destino
-                """
-        );
+                """);
 
         try (MqiBroker broker =
                      MqiBroker.start(enginePath())) {
@@ -228,6 +245,10 @@ class PrologCodeGeneratorMqiLiveIT {
         }
     }
 
+    // =====================================================
+    // TEST 3 - INCOMING RELATIONSHIP
+    // =====================================================
+
     /**
      * Verifies incoming relationship matching.
      */
@@ -235,13 +256,11 @@ class PrologCodeGeneratorMqiLiveIT {
     void shouldExecuteGeneratedIncomingRelationship()
             throws Exception {
 
-        String goal = compile(
-                """
+        String goal = compile("""
                 MATCH (a:Person)<-[r:Amigo]-(b:Person)
                 RETURN a.name AS destino,
                        b.name AS origen
-                """
-        );
+                """);
 
         try (MqiBroker broker =
                      MqiBroker.start(enginePath())) {
@@ -268,6 +287,10 @@ class PrologCodeGeneratorMqiLiveIT {
         }
     }
 
+    // =====================================================
+    // TEST 4 - UNDIRECTED RELATIONSHIP
+    // =====================================================
+
     /**
      * Verifies both orientations of an
      * undirected relationship.
@@ -276,13 +299,11 @@ class PrologCodeGeneratorMqiLiveIT {
     void shouldExecuteGeneratedUndirectedRelationship()
             throws Exception {
 
-        String goal = compile(
-                """
+        String goal = compile("""
                 MATCH (a:Person)-[r:Amigo]-(b:Person)
                 RETURN a.name AS persona,
                        b.name AS contacto
-                """
-        );
+                """);
 
         try (MqiBroker broker =
                      MqiBroker.start(enginePath())) {
@@ -310,7 +331,7 @@ class PrologCodeGeneratorMqiLiveIT {
     }
 
     // =====================================================
-    // NEW WHERE INTEGRATION TESTS
+    // TEST 5 - WHERE NUMERIC COMPARISON
     // =====================================================
 
     /**
@@ -324,13 +345,11 @@ class PrologCodeGeneratorMqiLiveIT {
     void shouldExecuteWhereWithNumericComparison()
             throws Exception {
 
-        String goal = compile(
-                """
+        String goal = compile("""
                 MATCH (a:Person)
                 WHERE a.age > 40
                 RETURN a.name AS nombre
-                """
-        );
+                """);
 
         try (MqiBroker broker =
                      MqiBroker.start(enginePath())) {
@@ -344,6 +363,10 @@ class PrologCodeGeneratorMqiLiveIT {
         }
     }
 
+    // =====================================================
+    // TEST 6 - WHERE STRING EQUALITY
+    // =====================================================
+
     /**
      * Verifies WHERE equality with a text literal.
      */
@@ -351,13 +374,11 @@ class PrologCodeGeneratorMqiLiveIT {
     void shouldExecuteWhereWithStringEquality()
             throws Exception {
 
-        String goal = compile(
-                """
+        String goal = compile("""
                 MATCH (a:Person)
                 WHERE a.name = 'Juan Perez'
                 RETURN a
-                """
-        );
+                """);
 
         try (MqiBroker broker =
                      MqiBroker.start(enginePath())) {
@@ -370,6 +391,10 @@ class PrologCodeGeneratorMqiLiveIT {
             );
         }
     }
+
+    // =====================================================
+    // TEST 7 - WHERE NODE PROPERTY COMPARISON
+    // =====================================================
 
     /**
      * Verifies comparison between properties
@@ -385,15 +410,13 @@ class PrologCodeGeneratorMqiLiveIT {
     void shouldExecuteWhereComparingNodeProperties()
             throws Exception {
 
-        String goal = compile(
-                """
+        String goal = compile("""
                 MATCH (a:Person)-[r:Amigo]->(b:Person)
                 WHERE a.age > b.age
                 RETURN r AS relacion,
                        a.name AS mayor,
                        b.name AS menor
-                """
-        );
+                """);
 
         try (MqiBroker broker =
                      MqiBroker.start(enginePath())) {
@@ -424,6 +447,10 @@ class PrologCodeGeneratorMqiLiveIT {
         }
     }
 
+    // =====================================================
+    // TEST 8 - REUSE PROPERTY IN WHERE AND RETURN
+    // =====================================================
+
     /**
      * Verifies that a property accessed in WHERE
      * can also be returned without an additional
@@ -436,13 +463,11 @@ class PrologCodeGeneratorMqiLiveIT {
     void shouldReuseWherePropertyInReturn()
             throws Exception {
 
-        String goal = compile(
-                """
+        String goal = compile("""
                 MATCH (a:Person)
                 WHERE a.name = 'Juan Perez'
                 RETURN a.name AS nombre
-                """
-        );
+                """);
 
         String propertyGoal =
                 "user_amigos_prop(__A, 'name', __A_NAME)";
@@ -466,6 +491,10 @@ class PrologCodeGeneratorMqiLiveIT {
         }
     }
 
+    // =====================================================
+    // TEST 9 - WHERE WITH NO MATCHES
+    // =====================================================
+
     /**
      * Verifies that a WHERE condition matching
      * no nodes returns a table header without
@@ -475,13 +504,11 @@ class PrologCodeGeneratorMqiLiveIT {
     void shouldExecuteWhereWithNoMatches()
             throws Exception {
 
-        String goal = compile(
-                """
+        String goal = compile("""
                 MATCH (a:Person)
                 WHERE a.age > 1000
                 RETURN a.name AS nombre
-                """
-        );
+                """);
 
         try (MqiBroker broker =
                      MqiBroker.start(enginePath())) {
@@ -495,6 +522,165 @@ class PrologCodeGeneratorMqiLiveIT {
         }
     }
 
+    // =====================================================
+    // TEST 10 - REUSED NODE VARIABLE WITH SAME LABEL
+    // =====================================================
+
+    /**
+     * A reused node variable identifies one physical node.
+     * Repeating a compatible label must not create a Cartesian
+     * product or introduce duplicate result rows.
+     *
+     * The sample engine contains three Person nodes:
+     * id1, id2 and id3.
+     */
+    @Test
+    void shouldJoinRepeatedNodeVariableWithSameLabel()
+            throws Exception {
+
+        String goal = compile("""
+                MATCH (e:Person), (e:Person)
+                RETURN e
+                """);
+
+        try (MqiBroker broker =
+                     MqiBroker.start(enginePath())) {
+
+            String table = execute(broker, goal);
+
+            List<String> lines =
+                    table.lines().toList();
+
+            assertFalse(
+                    lines.isEmpty(),
+                    "The result must have a header."
+            );
+
+            assertEquals(
+                    "e",
+                    lines.getFirst()
+            );
+
+            List<String> ids =
+                    lines.subList(1, lines.size());
+
+            assertEquals(
+                    3,
+                    ids.size(),
+                    "The shared variable must return "
+                            + "exactly three rows."
+            );
+
+            assertEquals(
+                    Set.of("id1", "id2", "id3"),
+                    new HashSet<>(ids),
+                    "All three Person nodes must "
+                            + "appear exactly once."
+            );
+        }
+    }
+
+    // =====================================================
+    // TEST 11 - INCOMPATIBLE LABEL CONSTRAINTS
+    // =====================================================
+
+    /**
+     * The same variable with different labels means that the
+     * bound node must satisfy BOTH label constraints.
+     *
+     * No node in the initial sample graph has JoinTestLabel.
+     */
+    @Test
+    void shouldReturnNoRowsForIncompatibleNodeLabels()
+            throws Exception {
+
+        String goal = compile("""
+                MATCH (e:Person), (e:JoinTestLabel)
+                RETURN e
+                """);
+
+        try (MqiBroker broker =
+                     MqiBroker.start(enginePath())) {
+
+            String table = execute(broker, goal);
+
+            assertEquals(
+                    "e",
+                    table,
+                    "No initial node should satisfy both labels."
+            );
+        }
+    }
+
+    // =====================================================
+    // TEST 12 - TWO DISTINCT LABELS ON SAME NODE
+    // =====================================================
+
+    /**
+     * Proves that two DIFFERENT labels can both match the same
+     * node, rather than merely testing that incompatible labels
+     * produce no rows.
+     *
+     * A single MQI session first creates a node with two labels,
+     * then looks it up through two separate MATCH patterns that
+     * reuse the same node variable.
+     */
+    @Test
+    void shouldMatchCreatedNodeWithBothDistinctLabels()
+            throws Exception {
+
+        String createGoal = compile("""
+                CREATE (d:Person:JoinTestLabel {
+                    name: 'CyphailLabelJoinTestOnly'
+                })
+                RETURN d
+                """);
+
+        String matchGoal = compile("""
+                MATCH (e:Person), (e:JoinTestLabel)
+                WHERE e.name = 'CyphailLabelJoinTestOnly'
+                RETURN e
+                """);
+
+        try (MqiBroker broker =
+                     MqiBroker.start(enginePath())) {
+
+            String createdTable = execute(broker, createGoal);
+
+            assertTrue(
+                    createdTable.startsWith("d\n"),
+                    "CREATE must return the new node ID."
+            );
+
+            String createdId =
+                    createdTable.substring("d\n".length()).trim();
+
+            assertFalse(
+                    createdId.isBlank(),
+                    "The created node must have an ID."
+            );
+
+            assertFalse(
+                    createdId.contains("\n"),
+                    "CREATE must return exactly one node."
+            );
+
+            String matchedTable =
+                    execute(broker, matchGoal);
+
+            assertEquals(
+                    "e\n" + createdId,
+                    matchedTable,
+                    "A node with both labels must satisfy the "
+                            + "combined constraints on variable e."
+            );
+        }
+    }
+
+    // =====================================================
+    // HELPER - COUNT GOAL OCCURRENCES
+    // =====================================================
+
     /**
      * Counts occurrences of a Prolog goal in
      * the generated source string.
@@ -507,7 +693,9 @@ class PrologCodeGeneratorMqiLiveIT {
         int count = 0;
         int index = 0;
 
-        while ((index = text.indexOf(fragment, index)) >= 0) {
+        while (
+                (index = text.indexOf(fragment, index)) >= 0
+        ) {
             count++;
             index += fragment.length();
         }

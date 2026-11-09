@@ -117,11 +117,26 @@ cy_node_exists(Graph, NodeId) :-
 % ============================================
 
 cy_get_node_property(Graph, NodeId, Key, Value) :-
-    cy_get_node(
-        Graph,
-        NodeId,
-        _,
-        Properties
+    (
+        nonvar(NodeId)
+    ->
+        % A known ID retrieves only the current stored record.
+        once(
+            cy_get_node(
+                Graph,
+                NodeId,
+                _,
+                Properties
+            )
+        )
+    ;
+        % Preserve enumeration when the node ID is unbound.
+        cy_get_node(
+            Graph,
+            NodeId,
+            _,
+            Properties
+        )
     ),
 
     member(
@@ -217,13 +232,30 @@ cy_get_edge(
 % ============================================
 
 cy_get_edge_property(Graph, EdgeId, Key, Value) :-
-    cy_get_edge(
-        Graph,
-        EdgeId,
-        _,
-        _,
-        _,
-        Properties
+    (
+        nonvar(EdgeId)
+    ->
+        % A known ID must retrieve only its current record.
+        once(
+            cy_get_edge(
+                Graph,
+                EdgeId,
+                _,
+                _,
+                _,
+                Properties
+            )
+        )
+    ;
+        % Preserve enumeration for unbound relationship IDs.
+        cy_get_edge(
+            Graph,
+            EdgeId,
+            _,
+            _,
+            _,
+            Properties
+        )
     ),
 
     member(
@@ -271,15 +303,17 @@ cy_set_node_property(Graph, NodeId, Key, Value) :-
     atom(Key),
     ground(Value),
 
-    recorded(
-        cyphail_graph_nodes,
-        node(
-            Graph,
-            NodeId,
-            Labels,
-            Properties
-        ),
-        Reference
+    once(
+        recorded(
+            cyphail_graph_nodes,
+            node(
+                Graph,
+                NodeId,
+                Labels,
+                Properties
+            ),
+            Reference
+        )
     ),
 
     cy_update_property(
@@ -289,7 +323,8 @@ cy_set_node_property(Graph, NodeId, Key, Value) :-
         UpdatedProperties
     ),
 
-    recordz(
+    % Keep updated records ahead of an active recorded/3 traversal.
+    recorda(
         cyphail_graph_nodes,
         node(
             Graph,
@@ -366,7 +401,8 @@ cy_set_edge_property(Graph, EdgeId, Key, Value) :-
         UpdatedProperties
     ),
 
-    recordz(
+    % Keep updated records ahead of an active recorded/3 traversal.
+    recorda(
         cyphail_graph_edges,
         edge(
             Graph,
@@ -480,7 +516,8 @@ cy_remove_node_property(Graph, NodeId, Key) :-
         UpdatedProperties
     ),
 
-    recordz(
+    % Keep updated records ahead of an active recorded/3 traversal.
+    recorda(
         cyphail_graph_nodes,
         node(
             Graph,
@@ -548,7 +585,8 @@ cy_remove_edge_property(Graph, EdgeId, Key) :-
         UpdatedProperties
     ),
 
-    recordz(
+    % Keep updated records ahead of an active recorded/3 traversal.
+    recorda(
         cyphail_graph_edges,
         edge(
             Graph,

@@ -1,0 +1,20 @@
+
+MATCH (p:Person)
+WHERE p.age > 30
+RETURN p.name, p.age;
+
+CREATE (p:PruebaLoadP2 {
+    name: 'Nodo_LOAD_P2',
+    age: 22
+})
+RETURN p;
+
+MATCH (p:PruebaLoadP2)
+RETURN p, p.name, p.age;
+
+MATCH (p:PruebaLoadP2)
+SET p.age = 40
+RETURN p, p.name, p.age;
+
+MATCH (p:PruebaLoadP2)
+RETURN p, p.name, p.age;

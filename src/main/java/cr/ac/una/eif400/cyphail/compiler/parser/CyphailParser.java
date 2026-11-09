@@ -1,4 +1,3 @@
-
 package cr.ac.una.eif400.cyphail.compiler.parser;
 
 import cr.ac.una.eif400.cyphail.ast.Query;
@@ -31,7 +30,7 @@ import java.util.Optional;
  *
  * Supports:
  * - MATCH and relationship patterns.
- * - WHERE with comparisons, AND and OR.
+ * - WHERE with comparisons, AND, OR and NOT.
  * - Parenthesized expressions.
  * - Standalone CREATE.
  * - SET with one or more property assignments.
@@ -630,7 +629,7 @@ public final class CyphailParser {
     /**
      * Precedence:
      *
-     * OR < AND < comparisons < grouped expressions
+     * OR < AND < NOT < comparisons < grouped expressions
      */
     private Parser<Expression> expressionParser() {
 
@@ -656,10 +655,10 @@ public final class CyphailParser {
 
     private Parser<Expression> logicalAndExpressionParser() {
 
-        return comparisonExpressionParser().flatMap(first ->
+        return logicalNotExpressionParser().flatMap(first ->
                 Parsers.many(
                         Parsers.token(TokenType.AND).flatMap(token ->
-                                comparisonExpressionParser()
+                                logicalNotExpressionParser()
                         )
                 ).map(rest ->
                         foldBinaryExpressions(
@@ -668,6 +667,33 @@ public final class CyphailParser {
                                 rest
                         )
                 )
+        );
+    }
+
+    /**
+     * Parses unary NOT with lower precedence than comparisons
+     * and higher precedence than AND and OR.
+     *
+     * Examples:
+     * NOT a.active = true
+     * NOT (a.age > 18 OR b.age < 30)
+     * NOT NOT a.active = false
+     */
+    private Parser<Expression> logicalNotExpressionParser() {
+
+        Parser<Expression> notExpression =
+                Parsers.token(TokenType.NOT).flatMap(token ->
+                        logicalNotExpressionParser().map(operand ->
+                                new UnaryExpression(
+                                        UnaryOperator.NOT,
+                                        operand
+                                )
+                        )
+                );
+
+        return Parsers.or(
+                notExpression,
+                comparisonExpressionParser()
         );
     }
 
