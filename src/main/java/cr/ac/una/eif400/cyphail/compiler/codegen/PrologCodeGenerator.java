@@ -1355,6 +1355,11 @@ public final class PrologCodeGenerator {
                 );
             }
 
+            if (expression instanceof BooleanLiteralExpression value) {
+
+                return value.value() ? "true" : "false";
+            }
+
             throw unsupported(
                     "Pattern property expression: "
                             + expression
@@ -1423,6 +1428,20 @@ public final class PrologCodeGenerator {
 
             throw unsupported(
                     "Direct binary expression visitor"
+            );
+        }
+
+        /**
+         * WHERE unary expressions are compiled
+         * by PrologWhereGoalBuilder.
+         */
+        @Override
+        public String visitUnaryExpression(
+                UnaryExpression expression
+        ) {
+
+            throw unsupported(
+                    "Direct unary expression visitor"
             );
         }
 

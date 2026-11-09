@@ -1,4 +1,3 @@
-
 /*
  * Universidad Nacional de Costa Rica
  * School of Informatics
@@ -153,8 +152,6 @@ user_amigos_node(NodeId) :-
 user_amigos_label(id1, 'Person').
 
 user_amigos_label(id2, 'Person').
-
-user_amigos_label(id3, 'Person').
 
 user_amigos_label(id3, 'Person').
 

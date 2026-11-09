@@ -1,3 +1,4 @@
+
 package cr.ac.una.eif400.cyphail.compiler.analyzer;
 
 import cr.ac.una.eif400.cyphail.ast.Query;
@@ -12,6 +13,7 @@ import cr.ac.una.eif400.cyphail.ast.clause.SetLabels;
 import cr.ac.una.eif400.cyphail.ast.clause.SetProperty;
 import cr.ac.una.eif400.cyphail.ast.clause.UpdatingClause;
 import cr.ac.una.eif400.cyphail.ast.expression.BinaryExpression;
+import cr.ac.una.eif400.cyphail.ast.expression.UnaryExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.Expression;
 import cr.ac.una.eif400.cyphail.ast.expression.LiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.PropertyExpression;
@@ -352,6 +354,16 @@ public final class SemanticAnalyzer {
                 }
         );
 
+        // Reject duplicate labels within the same node pattern.
+        if (node.labels().stream().distinct().count()
+                != node.labels().size()) {
+            state.errors.add(
+                    "Node pattern contains duplicate labels in "
+                            + context
+                            + "."
+            );
+        }
+
         for (PatternProperty property : node.properties()) {
             analyzeExpression(
                     property.value(),
@@ -504,6 +516,15 @@ public final class SemanticAnalyzer {
 
             analyzeExpression(
                     binary.right(),
+                    state,
+                    context
+            );
+            return;
+        }
+
+        if (expression instanceof UnaryExpression unary) {
+            analyzeExpression(
+                    unary.operand(),
                     state,
                     context
             );

@@ -1,4 +1,3 @@
-
 package cr.ac.una.eif400.cyphail.frontend;
 
 import cr.ac.una.eif400.cyphail.engine.mqi.MqiBroker;
@@ -27,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Project: Cyphail
  * Sprint: P2
  * Group: 04-10am
+ * Date: November 2026
  *
  * Class: ReplMultilineIntegrationTest
  *
@@ -42,27 +42,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * 1. Single-line statements with semicolons.
  * 2. Multiline statements with semicolons.
- * 3. Statements without a final semicolon.
+ * 3. Optional semicolon at end of input.
  * 4. Multiple statements on the same line.
  * 5. Continuation prompts.
  * 6. Compatibility with the .help command.
  * 7. Compatibility with inline .tree.
  * 8. Compatibility with multiline .tree.
- * 9. Exit while a statement is incomplete.
+ * 9. Exit while a statement is pending.
+ * 10. Optional semicolon with blank-line completion.
+ * 11. Incomplete statements at end of input.
+ * 12. Multiline statements without a final semicolon.
  *
  * Each test uses an independent MQI session.
  *
  * Team Members:
  *
- * Emmanuel Núñez Jiménez
+ * Emmanuel Nunez Jimenez
  * Valery Alfaro Morales
- * Roy Arias Mejía
+ * Roy Arias Mejia
  * Keynell Molina Mora
  * Julissa Solano Valverde
  *
- * @author Emmanuel Núñez Jiménez
+ * @author Emmanuel Nunez Jimenez
  * @author Valery Alfaro Morales
- * @author Roy Arias Mejía
+ * @author Roy Arias Mejia
  * @author Keynell Molina Mora
  * @author Julissa Solano Valverde
  */
@@ -182,7 +185,7 @@ class ReplMultilineIntegrationTest {
      * Verifies that the REPL combines
      * multiple lines into one statement.
      *
-     * The query must execute only after
+     * The query must execute after
      * receiving its final semicolon.
      */
     @Test
@@ -223,18 +226,21 @@ class ReplMultilineIntegrationTest {
     }
 
     // ============================================
-    // TEST 3 - MISSING SEMICOLON
+    // TEST 3 - OPTIONAL SEMICOLON AT EOF
     // ============================================
 
     /**
-     * Verifies that an incomplete Cyphail
-     * statement is not executed.
+     * Verifies that a syntactically complete
+     * statement without a final semicolon
+     * is executed when the input stream ends.
      *
-     * When input ends without a semicolon,
-     * the REPL must report the incomplete query.
+     * No explicit blank line is required.
+     *
+     * This test covers the updated EOF
+     * behavior of the Sprint P2 REPL.
      */
     @Test
-    void shouldNotExecuteStatementBeforeSemicolon()
+    void shouldExecuteCompleteStatementAtEndOfInputWithoutSemicolon()
             throws IOException {
 
         String result = runSession(
@@ -243,22 +249,26 @@ class ReplMultilineIntegrationTest {
         );
 
         assertTrue(
+                result.contains("p.name p.age")
+        );
+
+        assertTrue(
+                result.contains("Juan Perez")
+        );
+
+        assertTrue(
+                result.contains("Jorge Soto")
+        );
+
+        assertFalse(
                 result.contains(
                         "Incomplete Cyphail statement:"
                 )
         );
 
         assertFalse(
-                result.contains("Juan Perez")
-        );
-
-        assertFalse(
-                result.contains("p.name p.age")
-        );
-
-        assertFalse(
                 result.contains(
-                        "OK. Query available after"
+                        "MQI communication error:"
                 )
         );
     }
@@ -497,6 +507,139 @@ class ReplMultilineIntegrationTest {
         assertFalse(
                 result.contains(
                         "OK. Query available after"
+                )
+        );
+    }
+
+    // ============================================
+    // TEST 10 - OPTIONAL SEMICOLON
+    // ============================================
+
+    /**
+     * Verifies that a syntactically complete
+     * Cyphail statement can be executed
+     * without a terminating semicolon.
+     *
+     * A blank input line explicitly signals
+     * the end of the pending statement.
+     *
+     * The original multiline behavior
+     * must remain compatible.
+     */
+    @Test
+    void shouldExecuteStatementWithoutSemicolonAfterBlankLine()
+            throws IOException {
+
+        String result = runSession(
+                "MATCH (p:Person) RETURN p.name, p.age\n"
+                        + "\n"
+                        + ".exit\n"
+        );
+
+        assertTrue(
+                result.contains("p.name p.age")
+        );
+
+        assertTrue(
+                result.contains("Juan Perez")
+        );
+
+        assertFalse(
+                result.contains(
+                        "Incomplete Cyphail statement:"
+                )
+        );
+    }
+
+    // ============================================
+    // TEST 11 - INCOMPLETE STATEMENT AT EOF
+    // ============================================
+
+    /**
+     * Verifies that syntactically incomplete
+     * Cyphail input is not sent to the engine
+     * when the input stream ends.
+     *
+     * A missing RETURN expression must not
+     * be considered a complete query.
+     */
+    @Test
+    void shouldNotExecuteIncompleteStatementAtEndOfInput()
+            throws IOException {
+
+        String result = runSession(
+                "MATCH (p:Person) RETURN\n"
+        );
+
+        assertTrue(
+                result.contains(
+                        "Incomplete Cyphail statement:"
+                )
+        );
+
+        assertFalse(
+                result.contains("Juan Perez")
+        );
+
+        assertFalse(
+                result.contains(
+                        "MQI communication error:"
+                )
+        );
+
+        assertFalse(
+                result.contains(
+                        "OK. Query available after"
+                )
+        );
+    }
+
+    // ============================================
+    // TEST 12 - MULTILINE QUERY WITHOUT SEMICOLON
+    // ============================================
+
+    /**
+     * Verifies that a valid multiline query
+     * without a final semicolon executes
+     * when the input stream reaches EOF.
+     *
+     * The statement buffer must preserve
+     * all lines until the final validation.
+     */
+    @Test
+    void shouldExecuteMultilineStatementWithoutSemicolonAtEndOfInput()
+            throws IOException {
+
+        String result = runSession(
+                "MATCH (p:Person)\n"
+                        + "RETURN p.name, p.age\n"
+        );
+
+        assertTrue(
+                result.contains("... ")
+        );
+
+        assertTrue(
+                result.contains("p.name p.age")
+        );
+
+        assertTrue(
+                result.contains("Juan Perez")
+        );
+
+        assertTrue(
+                result.contains("Jorge Soto")
+        );
+
+        assertFalse(
+                result.contains(
+                        "Incomplete Cyphail statement:"
+                )
+        );
+
+        assertFalse(
+                result.contains(
+                        "MQI communication error:"
                 )
         );
     }

@@ -1,0 +1,16 @@
+CREATE (a:Person {name: 'Ana', age: 32, active: true, temporary: 'remove-me'})-[r:KNOWS {since: 2015, level: 'friend', oldFlag: 'remove-me'}]->(b:Person {name: 'Luis', age: 34, active: true})
+RETURN a, r, b;
+
+CREATE (p:Person {name: 'Marta', age: 29, active: true})-[t:WORKS_AT {role: 'Dev', since: 2019, active: true}]->(e:Company {name: 'Acme', country: 'CR'})
+RETURN p, t, e;
+
+MATCH (a:Person {name: 'Ana'}), (e:Company {name: 'Acme'})
+CREATE (a)-[s:PARTNER_OF {percentage: 30.5}]->(e)
+RETURN s;
+
+MATCH (m:Person {name: 'Marta'}), (a:Person {name: 'Ana'})
+CREATE (m)-[k:KNOWS {since: 2019}]->(a)
+RETURN k;
+
+CREATE (o:Person {name: 'OldContact', age: 54})-[r:KNOWS {since: 1999}]->(c:Person {name: 'FormerContact', age: 55})
+RETURN o, r, c;

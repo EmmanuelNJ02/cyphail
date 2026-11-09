@@ -14,6 +14,7 @@ import cr.ac.una.eif400.cyphail.ast.expression.IntegerLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.NullLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.PropertyExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.StringLiteralExpression;
+import cr.ac.una.eif400.cyphail.ast.expression.UnaryExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.VariableExpression;
 import cr.ac.una.eif400.cyphail.ast.pattern.NodePattern;
 import cr.ac.una.eif400.cyphail.ast.pattern.Pattern;
@@ -70,6 +71,8 @@ public interface AstVisitor<R> {
     R visitProjectionItem(ProjectionItem item);
 
     R visitBinaryExpression(BinaryExpression expression);
+
+    R visitUnaryExpression(UnaryExpression expression);
 
     R visitPropertyExpression(PropertyExpression expression);
 

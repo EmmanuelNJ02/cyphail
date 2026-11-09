@@ -1,11 +1,12 @@
-
 # Cyphail — Sprint P2
 
 Cyphail is an academic prototype of a graph query language developed for **EIF400 — Programming Paradigms** at the **School of Informatics, National University of Costa Rica (UNA)**.
 
 Sprint P2 extends the Sprint P1 lexer, functional parser combinators, abstract syntax tree (AST), semantic analyzer, and command-line interface. Its main change is the replacement of simulated query execution with a **real SWI-Prolog engine accessed through the Machine Query Interface (MQI)**.
 
-This README documents the Sprint P2 implementation for the **November 2026** project phase: architecture, setup, execution, tests, verified behavior, and remaining steps before submission. The most recent documented Maven verification took place on **October 29, 2026** in the team's Windows environment. If the source changes afterward, rerun the relevant checks before submitting.
+This README documents the Sprint P2 implementation for the **November 2026** project phase: architecture, setup, execution, tests, verified behavior, and remaining steps before submission.
+
+**Latest verified results — November 8, 2026:** `mvn test` passed **438 standard tests**; `mvn "-Dtest=*IT" test` separately passed **65 real SWI-Prolog/MQI integration tests**. Both runs reported **0 failures, 0 errors, and 0 skipped tests: 503 passing test cases across two separate executions**. A fresh `mvn clean package` also passed **438 standard tests**, compiled **88 production** and **69 test** Java source files with `release 21`, and generated the executable shaded JAR `target\cyphail-0.1.0.jar`. The JAR was launched successfully from CMD and ran real Cyphail queries through the MQI engine. These results describe the locally verified, **uncommitted** worktree, not the final bundle or submission.
 
 ---
 
@@ -21,11 +22,11 @@ This README documents the Sprint P2 implementation for the **November 2026** pro
 | School | School of Informatics (Escuela de Informática) |
 | Group | 04-10am |
 | Class time | 10:00 a.m. |
-| Main language | Java 26 |
+| Main language | Java (JDK 26.0.1 used for the local checks; Maven compiler release set to 21) |
 | Query execution engine | SWI-Prolog through MQI |
 | Academic term | Second semester, 2026 |
 | Project presentation month | November 2026 |
-| Last documented verification | October 29, 2026 (419 standard tests, 62 real MQI integration tests, clean package) |
+| Last documented verification | November 8, 2026 (438 standard + 65 real MQI tests; fresh clean package; real JAR/REPL demo) |
 
 ## Team Members
 
@@ -41,7 +42,7 @@ This README documents the Sprint P2 implementation for the **November 2026** pro
 
 Sprint P2 preserves the applicable Sprint P1 functionality and adds the following capabilities:
 
-- Multiline Cyphail statements terminated by a semicolon (`;`).
+- Multiline Cyphail statements. A semicolon (`;`) executes a complete statement immediately; a complete statement without `;` can be dispatched by entering a blank line or by reaching end-of-input. Immediate execution after a single non-terminated Enter has **not** been established.
 - The `.load "path/to/file.cyphail"` command, which reads and executes statements from disk.
 - Relationship patterns, including incoming (`IN`), outgoing (`OUT`), and undirected (`NONE`) AST directions.
 - Node and relationship labels, variables, and properties.
@@ -54,7 +55,9 @@ Sprint P2 preserves the applicable Sprint P1 functionality and adds the followin
 - AST-to-Prolog code generation and mapping between Cyphail and generated variables.
 - A broker that launches SWI-Prolog, opens an MQI socket connection, and reuses that connection during the REPL session.
 - MQI JSON response parsing using Gson and tabular result display.
-- Additional static semantic checks for relationship variables and reserved variable names.
+- Additional static semantic checks for relationship variables, reserved variable names, and repeated labels **inside one node pattern**.
+- `NOT` in supported `WHERE` expressions and related parsing/code-generation paths, as confirmed by the November regression suites.
+- Duplicate physical-edge prevention when multiple relationship occurrences appear in a `MATCH`.
 
 The **Sprint P1 Fake Query Engine is no longer part of the query execution path**. The previous simulated query-result JSON files have also been removed.
 
@@ -66,7 +69,7 @@ The graph catalog used by `.use` is a separate legacy feature. It is not the eng
 
 The following tools must be installed and accessible from the command line:
 
-- **JDK 26** (the Maven compiler release is configured as `26`).
+- **Java Development Kit**: the verified Windows setup uses **JDK 26.0.1**, while the Maven compiler is configured with `release 21` (`maven.compiler.release=21`). This permits Java 21-compatible class files; an actual JDK 21 runtime was **not** separately tested and is not required to repeat the documented checks on the existing verified setup.
 - **Apache Maven**.
 - **SWI-Prolog** with MQI support and `swipl` on the system `PATH`.
 - **Git** for version control and the final bundle.
@@ -102,6 +105,7 @@ cyphail/
 |-- pom.xml
 |-- cyphail.bat
 |-- .gitignore
+|-- demo-tests/               (local demo cases; inspect and track before delivery)
 |-- docs/
 |-- data/
 |   `-- graphs.json
@@ -190,7 +194,7 @@ Interactive REPL / .load script
 
 ### REPL and Routing
 
-The REPL receives interactive commands and Cyphail statements. A statement may span multiple lines and is dispatched when its terminating semicolon is received. `CommandRouter` directs each completed statement to the appropriate handler.
+The REPL receives interactive commands and Cyphail statements. A statement may span multiple lines; it is dispatched when `;` terminates it, or when a blank line/end-of-input completes a syntactically valid buffered statement. `CommandRouter` routes a completed statement to its handler. A statement without `;` is **not** currently documented as executing after only one Enter; this distinction matters in the instructor's optional-semicolon demonstration.
 
 ### Lexer, Parser, and AST
 
@@ -199,6 +203,8 @@ The lexer and functional parser combinators recognize Cyphail syntax. The parser
 ### Semantic Analysis
 
 The semantic analyzer validates variable declarations, uses, and role restrictions before code generation. Node variables may be reused as joins, but relationship variables cannot be redeclared within the same query or reused as node variables.
+
+On November 8, a regression was corrected: a node pattern containing the same label twice, for example `MATCH (e:Company:Company) RETURN e;`, is rejected with `Semantic error: Node pattern contains duplicate labels in MATCH pattern.` A dedicated JUnit test covers this rule **within one node pattern**. For the *same node variable reused across separate patterns with different labels*, the team's selected policy is to **merge label constraints (logical AND)**: the variable always denotes one physical node that must satisfy every label. Negative and positive REPL tests, as well as automated tests, were verified.
 
 ### Code Generation
 
@@ -259,12 +265,19 @@ A successful Maven build ends with:
 BUILD SUCCESS
 ```
 
-**Verified on October 29, 2026:** `mvn clean package` completed with `BUILD SUCCESS`, compiled **86 production Java files** and **67 test Java files**, passed **419 standard tests** (zero failures, errors, or skips), and generated the shaded JAR `target\cyphail-0.1.0.jar`.
+**Historical baseline (October 29, 2026):** `mvn clean package` compiled 86 production and 67 test Java files, passed 419 standard tests, and generated the shaded JAR; a separate `*LiveIT` run passed 62 MQI tests. These numbers describe that **earlier revision only**.
 
-The separate `mvn "-Dtest=*LiveIT" test` run also completed with `BUILD SUCCESS`, passing **62 real MQI integration tests**.
+**Latest verification (November 8, 2026), performed in Windows CMD:**
 
-These results describe the source revision tested on that date. Rerun the checks after any subsequent source changes.
+- `mvn test` — **438** standard tests passed; 0 failures, 0 errors, 0 skipped; `BUILD SUCCESS`.
+- `mvn "-Dtest=*IT" test` — **65** live SWI-Prolog/MQI tests passed; 0 failures, 0 errors, 0 skipped; `BUILD SUCCESS`.
+- `mvn clean package` — removed the previous `target/` directory, compiled **88 production Java files** and **69 test files** with `[debug release 21]`, passed **438** standard tests and generated `target\cyphail-0.1.0.jar` using Maven Shade; `BUILD SUCCESS`.
+- `java -jar target\cyphail-0.1.0.jar --help` — displayed the `repl` CLI command.
+- `java -jar target\cyphail-0.1.0.jar repl` — started the interactive REPL, executed `MATCH (p:Person) RETURN p.name, p.age;` and the same query without `;` followed by a blank line, and returned real graph rows.
+- `.load "prueba_load_p2.cyphail"` — successfully dispatched **5 statements** (`MATCH`, `CREATE`, `MATCH`, `SET`, `MATCH`), with the test node's age changing from 22 to 40.
+- R0/C0–C12, supplemental 8b/8c, and semantic/physical-edge uniqueness cases were manually exercised in the local REPL; these are **development verification results**, not a professor-graded review or a finalized repeatable fixture.
 
+The Shade plugin printed warnings for overlapping JAR metadata (`module-info` and `MANIFEST.MF`); **the build succeeded**. The current JAR still expects external Prolog files from the project tree. The local, verified changes have **not yet been committed, pushed, bundled or released**; repeat the appropriate tests if code changes before submission.
 ---
 
 ## Running Cyphail
@@ -341,7 +354,7 @@ The launcher selects the repository root automatically; it still needs the `src/
 | `.load "path/to/script.cyphail"` | Read and execute Cyphail statements from a file. |
 | `.exit` | Exit the REPL and close the MQI session. |
 
-Cyphail statements entered directly in the REPL must be terminated with `;`.
+**Semicolon behavior verified from the JAR:** a query ending in `;` executes immediately. Without a semicolon, a syntactically complete statement can be submitted by entering a **blank line**; a buffered complete statement can also be dispatched at EOF. This was tested manually and in `ReplMultilineIntegrationTest`. **Limitation to clarify before the instructor demo:** a single Enter after a complete, unterminated query currently leaves the continuation prompt (`...`) until a blank line; whether the instructor expects immediate execution with one Enter must be confirmed and demonstrated honestly.
 
 The `.tree` commands inspect queries; they do not mutate the Prolog graph.
 
@@ -369,7 +382,7 @@ WHERE p.age > 30
 RETURN p.name, p.age;
 ```
 
-The REPL accumulates input until the semicolon completes the statement.
+The REPL accumulates a statement until its `;`, or until a syntactically complete buffer is followed by a blank line or EOF. To execute a statement without a semicolon in an interactive session, **press Enter once on the statement and once more on an empty line**. Do not confuse this with immediate execution on the first Enter: that behavior has not been verified.
 
 The completed query is then parsed, analyzed, generated, and sent to the real engine.
 
@@ -393,7 +406,7 @@ Start the REPL and enter:
 .load "example_p2.cyphail"
 ```
 
-The file handler reads and dispatches complete statements **in their original order**, using the same routing and MQI session as interactive queries.
+The file handler reads and dispatches complete statements **in their original order**, using the same routing and MQI session as interactive queries. A local `prueba_load_p2.cyphail` example was executed successfully with five dispatched statements, creating a `PruebaLoadP2` node, changing `age` from 22 to 40, and reading the updated value. This file is currently **untracked**; decide which demo files to include in Git before packaging.
 
 A later statement may therefore read data created by an earlier one.
 
@@ -434,9 +447,26 @@ The `.about` and `.exit` commands were also exercised manually; `.about` display
 
 ---
 
+## Verified Live REPL Results — November 8, 2026
+
+The following table was returned by the JAR from the instructor-provided example graph:
+
+```text
+>>> MATCH (p:Person) RETURN p, p.name, p.age;
+p p.name p.age
+id1 'Juan Perez' 30
+id2 'Jorge Soto' 43
+id3 'Maria Salas' 25
+id3 'Maria Salas' 30
+```
+
+Two rows for `id3` correspond to two `age` facts in the Prolog example graph. This is **not** evidence of a fourth `Person` node. The demo `.load` script also returned an updated test-node age of 40 after a `SET`. All these values depend on the current engine data and session.
+
+---
+
 ## Sprint P2 Query Examples
 
-The examples below demonstrate supported language constructs.
+The examples below demonstrate supported language constructs. The verified instructor review also includes **C11 (multiple SET assignments)** and **C12 (multiple REMOVE operations)**, tested manually against nodes and relationships on November 8. A separate `demo-tests/` directory exists locally but is not yet tracked in Git; inspect its contents and ensure the final demonstration scripts are versioned.
 
 Results depend on the contents of the Prolog graph in the current session.
 
@@ -653,6 +683,52 @@ RETURN a.name, b.name, c.name;
 
 The project preserves the earlier semantic checks for variables used before their declaration or used without any valid declaration.
 
+### 6. Duplicate Labels in One Node Pattern Are Rejected
+
+The following query is invalid:
+
+```cypher
+MATCH (e:Company:Company)
+RETURN e;
+```
+
+Observed on November 8, 2026:
+
+```text
+Semantic error: Node pattern contains duplicate labels in MATCH pattern.
+```
+
+The new `SemanticAnalyzerTest.shouldRejectDuplicateLabelsInMatchPattern` test also passes. The distinct-labels example `MATCH (x:Person:Employee)` is **not** a duplicate and remains permitted by this check.
+
+### 7. A Node Variable Reused with Different Labels: Merge Constraints (AND)
+
+The selected policy is **conjunction**, not a semantic error: a repeated node variable refers to the **same node**, which must have all labels specified in the separate patterns.
+
+**Negative example** (both labels exist on other nodes, but no node has both):
+
+```cypher
+MATCH (e:DemoC4), (e:DemoC8)
+RETURN e;
+```
+
+The REPL returned only the `e` header, with no rows.
+
+**Positive example** (one node has both labels):
+
+```cypher
+CREATE (e:DemoC4:DemoC8 {name: 'NodoDobleEtiquetaP2'}) RETURN e;
+
+MATCH (e:DemoC4), (e:DemoC8)
+WHERE e.name = 'NodoDobleEtiquetaP2'
+RETURN e;
+```
+
+The returned ID matched the ID created (`cy_node_8` in that **single test session**). Different sessions may allocate different IDs. Three added live-MQI tests in `PrologCodeGeneratorMqiLiveIT` cover reuse with the same label, incompatible labels, and a node satisfying two different labels. **A duplicated label within one node pattern remains invalid**.
+
+### 8. Distinct Physical Relationships in Multi-Pattern MATCH
+
+Code generation adds pairwise `cy_neq/2` restrictions so two different relationship occurrences cannot consume the **same physical edge**, even with distinct variable names. This is separate from the static check prohibiting reuse of one relationship variable name. A negative manual test pairing `PRUEBA_C8` with itself returned no rows; a positive test combining two distinct `TRABAJA_C10` relations returned `cy_edge_3 cy_edge_6` and `cy_edge_6 cy_edge_3` without any self-pairs. The supplemental 8c test also verified a Cartesian product of disconnected patterns (2 × 1 = 2 rows). These results refer to one local REPL session.
+
 Static semantic errors are identified before the generated query is sent to SWI-Prolog.
 
 ---
@@ -741,7 +817,7 @@ The current execution path uses `PrologQueryHandler`, code generation, the MQI b
 
 The project uses **JUnit 5** and **Maven Surefire**.
 
-The standard suite and the `*LiveIT` real-MQI integration suite use separate Maven selectors.
+The standard suite and the classes matching `*IT` (including `*LiveIT`) use separate Maven test selectors. The November 8 live-integration run used `-Dtest=*IT`. The instructor's complete functional demo is separate from these automated suites.
 
 The test totals below refer to their **separate executions**; they are not one combined Maven run.
 
@@ -760,8 +836,10 @@ The live-MQI test classes are not automatically included in a normal `mvn test` 
 Execute them explicitly:
 
 ```cmd
-mvn "-Dtest=*LiveIT" test
+mvn "-Dtest=*IT" test
 ```
+
+The earlier `mvn "-Dtest=*LiveIT" test` selector appears in historical October runs. The current verified selector is `-Dtest=*IT`, exercising **65** real MQI integration cases on November 8.
 
 These tests cover real MQI connections, the Prolog engine, CodeGen, and supported graph operations.
 
@@ -773,30 +851,19 @@ The following command runs the main frontend integration test classes:
 mvn "-Dtest=CommandRouterIntegrationTest,ReplIntegrationTest,ReplLoadIntegrationTest,ReplMultilineIntegrationTest,PrologQueryHandlerIntegrationTest" test
 ```
 
-### Last Verified Results — October 29, 2026
+### Latest Verified Results — November 8, 2026
 
 | Command / suite | Tests | Failures | Errors | Skipped | Outcome |
 |---|---:|---:|---:|---:|---|
-| `mvn test` (standard suite) | 419 | 0 | 0 | 0 | BUILD SUCCESS |
-| `mvn "-Dtest=*LiveIT" test` (real MQI suite) | 62 | 0 | 0 | 0 | BUILD SUCCESS |
-| `mvn clean package` (clean build and standard suite) | 419 | 0 | 0 | 0 | BUILD SUCCESS; shaded JAR created |
+| `mvn test` (standard suite) | **438** | 0 | 0 | 0 | BUILD SUCCESS |
+| `mvn "-Dtest=*IT" test` (real MQI suite) | **65** | 0 | 0 | 0 | BUILD SUCCESS |
+| `mvn clean package` (clean build + standard suite) | **438** | 0 | 0 | 0 | BUILD SUCCESS; shaded JAR created |
 
-The **419 standard tests** and **62 live-MQI tests** were executed in separate runs and must not be described as one Maven invocation.
+**Combined count: 503 passing test cases across two separate suites** (`438 + 65`). The 438 cases executed again during `mvn clean package` are a **repeat**, not an additional 438 tests. The test groups are not one Maven invocation.
 
-**Combined count across the two separately executed suites: 481 passing tests.** The 62 `*LiveIT` tests are not automatically included in `mvn test` or `mvn clean package`.
+The main suite includes 12 `ReplMultilineIntegrationTest` and 8 `SemanticAnalyzerTest` cases. The live integration suite includes 12 `PrologCodeGeneratorMqiLiveIT` cases, among its 65 total cases.
 
-The real-MQI suite covers CodeGen, CREATE, SET, REMOVE, DELETE, WHERE logic, graph storage and MQI connections.
-
-Regression tests verify `SET` on original Prolog relationships and `MATCH + CREATE` between original nodes or between original and newly created nodes.
-
-The five tests in `PrologQueryHandlerIntegrationTest` and the four `PrologCodeGeneratorMatchPropertyReferenceTest` cases are included in the 419-test standard suite.
-
-The clean package result and both test-suite results are valid for the source revision verified on **October 29, 2026**.
-
-They do not automatically verify future code changes or establish that this tested worktree has been committed and pushed to GitHub.
-
-**Before the final commit:** audit the remaining SPEC requirements and review the Git diff. If any production or test source changes, repeat the clean build and both test suites, and confirm that the submitted Git commit matches the verified code.
-
+These runs verify the **current local source revision**, but they do **not** establish that it has been committed, pushed or included in a distribution bundle. If any Java or Prolog source changes before delivery, rerun the appropriate suites and a clean build.
 ---
 
 ## Troubleshooting Maven Cleanup on Windows
@@ -821,7 +888,7 @@ The normal suite can still be executed using:
 mvn test
 ```
 
-However, passing `mvn test` is not a substitute for verifying `mvn clean test` or `mvn clean package` before delivery.
+`mvn clean package` **did succeed on November 8, 2026**, after removing the previous `target/`. If a future clean fails due to locked files, investigate that new incident rather than treating the historical problem as current.
 
 ---
 
@@ -829,27 +896,111 @@ However, passing `mvn test` is not a substitute for verifying `mvn clean test` o
 
 Cyphail P2 is an academic prototype, not a complete production implementation of Cypher or a production graph database.
 
-The following distinctions and remaining checks are important:
-
-- **Verified: real execution.** The REPL executes Cyphail statements through SWI-Prolog/MQI rather than the P1 fake engine.
-- **Verified: graph state within one session.** An external-folder launcher test created `cy_node_0` and then matched the same node and its `name` property without restarting the REPL.
-- **Not established: permanent persistence.** Do not assume that graph data survives a new REPL session.
+- **Verified:** real REPL → parser → AST → semantic analyzer → Prolog CodeGen → MQI → SWI-Prolog → tabular output; no P1 fake query execution.
+- **Verified:** `mvn clean package` on November 8, with 438 standard tests, and a separate 65-case live-MQI suite; real executable JAR startup and a live `MATCH` query.
+- **Verified:** C0–C12 and additional 8b/8c with instructor-shaped queries adapted to the engine graph, including updates and deletions. Some test records are created during a REPL session and must be reset/recreated for a repeatable final demo.
+- **Verified:** node-variable reuse across multiple patterns, with different labels combined by AND, and distinct physical-edge enforcement across multiple relationship patterns.
+- **Verified with an important nuance:** semicolon-free statements execute after a blank line or EOF; first-Enter immediate execution without a semicolon is not established.
+- **Historical verification:** `cyphail.bat repl` launched from the project root or its parent folder, preserving graph state within a session.
+- **Not established:** permanent graph persistence across REPL restarts. Engine data created within a session should not be assumed to survive a restart.
 - **Legacy behavior:** `.use` reads `data/graphs.json`; it does not switch the active graph inside SWI-Prolog.
-- **Verified: launcher path handling.** `cyphail.bat repl` runs from the project root or a different current directory when the repository structure is available.
-- **Not verified: fully independent JAR.** The JAR still relies on the external project-relative Prolog source file unless packaging is explicitly extended and tested.
-- **Outside the currently implemented CodeGen scope:** although the parser recognizes `RETURN DISTINCT`, `RETURN *`, `ORDER BY`, `SKIP` and `LIMIT`, execution currently rejects these constructs. They are not listed as mandatory execution features in the available Sprint P2 SPEC or historical P1 required-query list.
-- **Verified: clean Maven build.** On October 29, 2026, `mvn clean package` compiled 86 production and 67 test Java sources, passed 419 standard tests, and generated the shaded JAR. `java -jar target\cyphail-0.1.0.jar --help` also executed successfully.
-- **Verified regressions:** original graph relationship updates through `SET` and relationships created by `MATCH + CREATE` between original sample nodes or mixed original/new nodes passed live MQI integration tests.
-- **Final audit needed:** confirm any remaining exact P2 SPEC examples and Sprint P1 compatibility edge cases. The parser was reviewed for functional combinators (`map`, `flatMap`, `many`, `optional`), and the REPL dispatch uses `statements.stream().allMatch(commandRouter::route)`; this is implementation evidence rather than a guarantee about the instructor's final assessment.
-- **Final regression if code changes:** rerun both test suites and `mvn clean package` after any additional source changes. Then confirm that the final JAR, README, Git history, bundle, and ZIP are consistent.
+- **Packaging limitation:** the shaded JAR is executable from the repository root and still expects `src/main/prolog/engine.pl` and `graph_store.pl` in the project layout. A standalone JAR without those source files has not been verified.
+- **Execution scope:** although the parser recognizes `RETURN DISTINCT`, `RETURN *`, `ORDER BY`, `SKIP` and `LIMIT`, the current execution pathway rejects these constructs. They are not listed as mandatory *execution* features in the supplied P2 SPEC. The additional `DETACH DELETE` feature is beyond the 10-case sprint sheet, though supported by the current implementation.
+- **Example data:** the instructor-provided sample graph may contain more than one age value for a node (e.g., `id3`), resulting in multiple Prolog rows for the same node ID when projecting `age`. Do not edit sample facts or suppress rows without reviewing the actual source and regression effects.
+- **Additional review before submission:** confirm `.tree` behavior, inherited P1 commands and edge cases, document all external/AI-assisted sources, review every source change and untracked file, and prepare a self-contained, repeatable demo fixture.
+- **Source changes after this point:** rerun `mvn test`, `mvn "-Dtest=*IT" test`, and `mvn clean package`; confirm the final commit, Git bundle, ZIP, and README all describe the same revision.
 
-Successful tests are evidence of the cases exercised, not proof that every possible query or deployment environment is covered.
+Passing tests proves the exercised behaviors, not every possible query or environment. **No Java or Maven version change is required by the observed successful build.**
+---
+
+## Instructor Review — November 17, 2026
+
+The guide scores functionality in R0/C0–C12 (60 points), code quality/README/model/paradigm/smells (20 points), and the team's defense (20 points). The instructor also requires that the review sheet be provided in PDF format and warns that key missing prerequisites can void the evaluation.
+
+| Criterion | Comparable query or operation | Current development evidence |
+|---|---|---|
+| R0 | Build from Windows CMD | Fresh `mvn clean package`: BUILD SUCCESS; 88 production/69 test sources; JAR created |
+| C0 | `.load` | Exercised with `.cyphail` scripts |
+| C1 | `-[r]->` | Manually exercised |
+| C2 | `-[:Label]->` | Manually exercised |
+| C3 | `<-[r:Label]-` and undirected relation | Manually exercised |
+| C4 | Inline edge property and `RETURN r.property` | Manually exercised |
+| C5 | WHERE comparisons on node and edge properties | Manually exercised |
+| C6 | Boolean expressions including `NOT` | Manually exercised |
+| C7 | MATCH two nodes, CREATE relation, reuse IDs | Manually exercised; no node clones observed |
+| C8 | CREATE nodes and edge without preceding MATCH | Manually exercised |
+| C9 | MATCH/WHERE/DELETE an edge | Manually exercised |
+| C10 | Multi-pattern integrated query | Manually exercised |
+| C11 | Multiple SET assignments | Manually exercised; verified changes in later MATCH |
+| C12 | Multiple REMOVE assignments | Manually exercised; verified removal in later MATCH |
+
+These statuses refer to **manual development REPL runs** adapted to the engine graph, **not** a professor-graded review or a portable finalized demo script. Before presentation, package and rehearse the R0 build, C0–C12 setup/query/expected outputs, and supplemental 8b/8c. A bare query without `;` was run successfully after an empty line, but immediate one-Enter execution is not yet established.
+
+### Verified instructor-shaped query examples
+
+The following commands correspond to the local test data in **one** REPL session (IDs are illustrative and are not stable across restarts):
+
+```cypher
+// C1: relationship variable
+MATCH (p:Person)-[r]->(q:Person) RETURN r;
+
+// C2: typed relationship without a relation variable
+MATCH (a:Person)-[:Amigo]->(b:Person) RETURN a.name, b.name;
+
+// C3: incoming and undirected forms
+MATCH (b:Person)<-[r:Amigo]-(a:Person) RETURN a.name, b.name, r;
+MATCH (a:Person)-[r:Amigo]-(b:Person) RETURN a.name, b.name, r;
+
+// C4: inline relationship property (requires demo C4 fixture)
+MATCH (a:DemoC4)-[r:PRUEBA_C4 {desde: 2015}]->(b:DemoC4)
+RETURN a.name, b.name, r.desde;
+
+// C5: WHERE combines node and relationship properties
+MATCH (a:DemoC4)-[r:PRUEBA_C4 {desde: 2015}]->(b:DemoC4)
+WHERE r.desde > 2010 AND b.edad >= 30
+RETURN a.name, b.name, r.desde;
+
+// C6: OR/NOT; more than one relation property
+MATCH (a:DemoC4)-[r:PRUEBA_C4 {cargo: 'Dev'}]->(b:DemoC4)
+WHERE r.desde >= 2018 OR NOT b.name = 'OtroDestino'
+RETURN a.name, b.name, r.cargo, r.desde;
+
+// C7: MATCH two existing nodes and CREATE an edge with properties
+MATCH (a:DemoC4 {name: 'OrigenC4'}), (b:DemoC4 {name: 'DestinoC4'})
+CREATE (a)-[:PRUEBA_C7 {desde: 2020, nivel: 'amigo'}]->(b);
+
+// C8: standalone CREATE with string and boolean properties
+CREATE (a:DemoC8 {name: 'OrigenC8'})
+  -[r:PRUEBA_C8 {cargo: 'Dev', activo: true}]->(b:DemoC8 {name: 'DestinoC8'})
+RETURN a, r, b;
+
+// C9: delete edge only (requires C7)
+MATCH (a:DemoC4)-[r:PRUEBA_C7]->(b:DemoC4)
+WHERE r.desde < 2021 DELETE r;
+
+// C10: three patterns with shared variables and decimal/Boolean logic
+MATCH (p:DemoC10Persona {activo: true})-[t:TRABAJA_C10 {cargo: 'Dev'}]->(e:DemoC10Empresa),
+      (q:DemoC10Persona)-[s:SOCIO_C10]->(e),
+      (p)-[k:CONOCE_C10]-(q)
+WHERE (t.desde >= 2018 OR s.porcentaje > 25.5) AND NOT k.desde = 2020
+RETURN p.name, q.name, e.name, t.cargo, s.porcentaje, k.desde;
+
+// C11: multiple SET assignments
+MATCH (p:DemoC10Persona {name: 'AnaC10'})-[t:TRABAJA_C10]->(e:DemoC10Empresa)
+SET p.nivel = 2, t.prioridad = 5 RETURN p, p.nivel, t, t.prioridad;
+
+// C12: multiple REMOVE assignments
+MATCH (p:DemoC10Persona {name: 'AnaC10'})-[t:TRABAJA_C10]->(e:DemoC10Empresa)
+REMOVE p.nivel, t.prioridad RETURN p, t, t.cargo;
+```
+
+**Do not execute this block blindly as a script:** it depends on demo data constructed in prior steps and contains mutations. Preparation, cleanup, stable ordering and expected outputs must be packaged in `demo-tests/` before instructor review.
 
 ---
 
 ## Technologies
 
-- Java 26
+- Java (JDK 26.0.1 used locally; Maven compiler target `release 21`)
 - Apache Maven
 - JUnit 5
 - picocli
@@ -859,7 +1010,7 @@ Successful tests are evidence of the cases exercised, not proof that every possi
 - Git
 - GitHub
 
-The parser uses functional parser combinators, and the REPL uses Java stream operations to dispatch complete statements.
+The parser uses functional parser combinators, and the REPL uses Java stream operations to dispatch complete statements. These are code-level illustrations of FP usage alongside the OO AST/visitor, broker and handler components; instructor assessment of design quality requires source review.
 
 The parser's `map`, `flatMap`, `Parsers.many` and `Parsers.optional` usage, together with the REPL's `statements.stream().allMatch(commandRouter::route)`, were inspected on October 29, 2026. These are source-level examples of functional-programming constructs; passing tests alone does not establish complete SPEC compliance.
 
@@ -871,8 +1022,10 @@ The project was developed using official course materials and related technical 
 
 - Cyphail project introduction and architecture.
 - Sprint P1 specification, grammar, and official parsing test cases.
-- Preliminary Sprint P2 specification provided by the instructor.
-- Instructor-provided SWI-Prolog MQI demonstration.
+- `EIF400-II-2026-SPEC-Sprint-P2-Preliminar-CLoria.md` / PDF, instructor's preliminary P2 SPEC.
+- `EIF400-II-2026-Cypahil-P2-10-Casos_Prueba_Unitarios.md` / PDF, instructor's C1–C10 and supplemental cases/validation rules.
+- `EIF400_II_2026_Guia_Revision_Cyphail_P2_CLoria.docx` / PDF, November 17 review guide (R0, C0–C12, README/code/defense).
+- `EIF400-II-2026-Cyphail_P2_MQI_Demo.zip`, instructor-provided SWI-Prolog MQI demonstration (reference implementation).
 - Java documentation.
 - Apache Maven documentation.
 - JUnit documentation.
@@ -886,11 +1039,18 @@ Cyphail is the project name established for EIF400.
 
 ## Artificial Intelligence Use Declaration
 
-Generative artificial intelligence was used as a supporting tool during the development and review of Cyphail, including explanations of course concepts, architectural suggestions, code suggestions, debugging, testing recommendations, documentation drafting, and review of parser, AST, REPL, and MQI behavior.
+Generative artificial intelligence (ChatGPT) was used as a supporting tool in discussion, explanations of course concepts, code review, debugging, testing recommendations, and documentation drafting. **Code was also proposed with AI assistance and must be declared as such, not represented as exclusively human-authored.**
 
-The project team remains responsible for reviewing and understanding all suggested changes, compiling and testing the implementation, maintaining the source code, and defending the submitted work.
+**Identifiable examples of AI-assisted code and review proposals** (this list is **not** an exhaustive authorship audit):
 
-AI tools must not be treated as an unexplained black box.
+- `src/main/java/cr/ac/una/eif400/cyphail/compiler/analyzer/SemanticAnalyzer.java`: the duplicate-label check inserted in `analyzeNode()`.
+- `src/test/java/cr/ac/una/eif400/cyphail/compiler/analyzer/SemanticAnalyzerTest.java`: duplicate-label and variable-reuse tests proposed/reviewed with assistance.
+- `src/main/java/cr/ac/una/eif400/cyphail/frontend/Repl.java` and `src/test/java/cr/ac/una/eif400/cyphail/frontend/ReplMultilineIntegrationTest.java`: blank-line/EOF completion and REPL tests discussed with assistance.
+- `src/test/java/cr/ac/una/eif400/cyphail/compiler/codegen/PrologCodeGeneratorMqiLiveIT.java`: three additional real-MQI variable/label reuse tests discussed and corrected with assistance.
+- `README.md`: technical documentation has been drafted and revised with ChatGPT assistance, including the present revision.
+- Earlier suggestions/reviews also involved `graph_store.pl`, CodeGen, parser, AST and MQI integration. **Before final submission the team must audit each source file against its actual edit history, attribute incorporated assistance and third-party work accurately, and comply with the instructor's restrictions.**
+
+The project team is responsible for individually understanding, independently verifying, testing, and defending all submitted code. The course guide prohibits **agentic AI** and undisclosed AI-generated or third-party code. This README does not certify compliance with that prohibition; the team must check its actual development process and the instructor's rules. The declaration should be expanded with precise source/code attribution before submission.
 
 ---
 
@@ -910,7 +1070,9 @@ The ZIP must contain:
 cyphail.bundle
 ```
 
-The bundle must represent the final submitted Git commit.
+The bundle must represent the **last intended, committed revision**. Do not prepare the bundle from uncommitted files and assume those changes are included. The final ZIP and bundle have **not** been generated or verified in the current review.
+
+The **November 17, 2026 instructor review sheet** must also be filled in where required and provided as a PDF. The team must have the R0 build demonstration and C0–C12 comparable scripts ready, explain the project architecture, meet the approximately 15-minute demo expectation, and defend the code. The review guide warns that failure to meet specified threshold requirements can nullify the project.
 
 Before preparing the submission, the team should confirm the final build, general tests, live MQI tests, source changes, documentation, GitHub history, bundle contents, and archive integrity.
 
@@ -922,26 +1084,31 @@ The instructor also expects evidence of ongoing Git contributions from all team 
 
 Complete these checks before treating the repository as ready for submission:
 
-- [x] A clean Maven package completed on October 29, 2026, and generated the shaded JAR (419 standard tests).
-- [x] General test suite passed (419 tests; zero failures, errors, or skips).
-- [x] Live MQI suite passed (62 tests; zero failures, errors, or skips).
-- [x] JAR started from the repository root; `.about` and `.exit` were verified.
-- [x] Windows launcher started from another directory; real `CREATE` and `MATCH` shared session state.
-- [x] Live MQI regression tests passed for SET on original relationships and CREATE involving original nodes.
-- [x] Five `PrologQueryHandlerIntegrationTest` cases passed, including rejection of a duplicated relationship variable.
-- [x] Reviewed the parser combinators (`map`, `flatMap`, `many`, `optional`) and the REPL's functional statement dispatch.
-- [x] Reviewed the production-file diff for `PrologCodeGenerator.java` and `MqiBroker.java`; no unexpected production-code changes were found.
-- [x] Re-ran `mvn test`, `mvn "-Dtest=*LiveIT" test`, `mvn clean package`, and the JAR `--help` command on October 29, 2026.
-- [ ] Verify any remaining exact SPEC example queries and Sprint P1 compatibility edge cases.
-- [ ] If Java or Prolog source code changes after this verification, rerun both test suites and the clean package.
-- [ ] Review all untracked files and the five team members' contribution history before committing.
-- [ ] Confirm that the final commit is present on the shared GitHub repository.
-- [ ] Generate `cyphail.bundle` from the intended final commit and verify it.
-- [ ] Create and inspect the submission ZIP using the final group-specific filename.
-- [ ] Prepare the live demo and ensure each team member can explain the implementation.
+- [x] `mvn test` passed **438** standard tests on November 8, 2026 (0 failures/errors/skips).
+- [x] `mvn "-Dtest=*IT" test` passed **65** real SWI-Prolog/MQI integration tests (0 failures/errors/skips).
+- [x] `mvn clean package` completed with **BUILD SUCCESS**, recompiling 88 production and 69 test sources with `release 21` and creating the shaded JAR.
+- [x] The JAR started from CMD with `--help` and `repl`; real MATCH results were printed.
+- [x] A query without `;` executed after an empty REPL line; the EOF path also has passing automated tests.
+- [x] `.load "prueba_load_p2.cyphail"` executed five statements in order and persisted a property update within the session.
+- [x] Instructor-shaped R0/C0–C12 functional tests were exercised manually with graph data prepared in the REPL.
+- [x] Supplemental 8b join and 8c disconnected product were exercised manually.
+- [x] Semantic error checks passed for repeated relationship variables, node/relationship role conflicts, reserved `__` names and duplicated labels within one node pattern.
+- [x] Both positive and negative joins for different labels on a reused node variable were exercised; chosen policy is conjunction of labels.
+- [x] Positive and negative tests for distinct physical edges were exercised.
+- [ ] Confirm what the instructor expects from a **single Enter without `;`** and verify/improve the REPL if necessary; do not call this behavior already proven.
+- [ ] Audit `.tree`, other inherited P1 commands and any remaining exact SPEC/edge cases after source review.
+- [ ] Convert locally prepared C0–C12 demo steps into **repeatable, versioned scripts** with data setup/cleanup and expected output (without depending on earlier REPL state).
+- [ ] Inspect the content and suitability of all untracked files, including `demo-tests/`, `prueba_load_p2.cyphail` and `informe_Emmanuel_git.txt`.
+- [ ] Review each production and test diff, project structure, documentation, OOP/FP and opportunities for DRY improvements.
+- [ ] Complete the AI-assisted code and external-source attribution audit; comply with the no-agentic-AI rule and ensure each teammate understands the code.
+- [ ] Review the Git contribution history of the five team members; confirm final intended commit and push to the shared repository.
+- [ ] Generate and verify `cyphail.bundle` **from the final intended commit**.
+- [ ] Create and inspect the group-named ZIP containing the required bundle and any additional requested materials.
+- [ ] Fill the November 17 instructor review sheet where required and export it to PDF; do not invent attendance or official scores.
+- [ ] Rehearse the approximately 15-minute live demonstration and prepare the team for questions.
+- [ ] If production or test code changes, rerun `mvn test`, `mvn "-Dtest=*IT" test` and `mvn clean package`, and ensure docs/commit/bundle refer to the same revision.
 
-The checklist reflects **verified work to date**; unchecked entries are not claims of completion.
-
+Checked items summarize the verified development environment. Unchecked items remain pending; they are not claims that the submission is complete.
 ---
 
 ## License and Academic Use

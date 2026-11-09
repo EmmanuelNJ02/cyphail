@@ -7,11 +7,15 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Unit tests for numeric literal tokenization in Sprint P2.
+ * Unit tests for numeric and boolean literal tokenization
+ * in Cyphail Sprint P2.
  *
  * Decimal values must be recognized as single tokens
  * without breaking existing integer or property access
  * tokenization.
+ *
+ * Boolean literals must be recognized in both uppercase
+ * and lowercase forms without affecting regular identifiers.
  *
  * Project: Cyphail - Sprint P2
  * Course: EIF400 - Programming Paradigms
@@ -31,7 +35,7 @@ class CyphailLexerP2Test {
     @Test
     void shouldRecognizeDecimalLiteralAsSingleToken() {
         List<Token> tokens = lexer.tokenize(
-                "SET p.precio = 19.99"
+                "SET p.price = 19.99"
         );
 
         List<String> types = tokens.stream()
@@ -81,7 +85,7 @@ class CyphailLexerP2Test {
     @Test
     void shouldPreserveIntegerAndPropertyAccessTokens() {
         List<Token> tokens = lexer.tokenize(
-                "WHERE p.edad > 18"
+                "WHERE p.age > 18"
         );
 
         List<TokenType> types = tokens.stream()
@@ -96,6 +100,29 @@ class CyphailLexerP2Test {
                         TokenType.IDENTIFIER,
                         TokenType.GREATER_THAN,
                         TokenType.INTEGER,
+                        TokenType.EOF
+                ),
+                types
+        );
+    }
+
+    @Test
+    void shouldRecognizeBooleanLiteralsInBothCases() {
+        List<Token> tokens = lexer.tokenize(
+                "true false TRUE FALSE trueValue"
+        );
+
+        List<TokenType> types = tokens.stream()
+                .map(Token::type)
+                .toList();
+
+        assertEquals(
+                List.of(
+                        TokenType.TRUE,
+                        TokenType.FALSE,
+                        TokenType.TRUE,
+                        TokenType.FALSE,
+                        TokenType.IDENTIFIER,
                         TokenType.EOF
                 ),
                 types

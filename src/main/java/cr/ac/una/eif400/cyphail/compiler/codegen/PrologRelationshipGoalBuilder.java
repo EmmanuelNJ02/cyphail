@@ -1,6 +1,6 @@
-
 package cr.ac.una.eif400.cyphail.compiler.codegen;
 
+import cr.ac.una.eif400.cyphail.ast.expression.BooleanLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.Expression;
 import cr.ac.una.eif400.cyphail.ast.expression.FloatLiteralExpression;
 import cr.ac.una.eif400.cyphail.ast.expression.IntegerLiteralExpression;
@@ -279,6 +279,10 @@ public final class PrologRelationshipGoalBuilder {
 
         if (expression instanceof FloatLiteralExpression value) {
             return Double.toString(value.value());
+        }
+
+        if (expression instanceof BooleanLiteralExpression value) {
+            return value.value() ? "true" : "false";
         }
 
         throw new UnsupportedOperationException(

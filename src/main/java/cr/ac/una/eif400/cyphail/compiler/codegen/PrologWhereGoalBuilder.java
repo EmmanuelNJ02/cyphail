@@ -1,4 +1,3 @@
-
 package cr.ac.una.eif400.cyphail.compiler.codegen;
 
 import cr.ac.una.eif400.cyphail.ast.clause.WhereClause;
@@ -31,7 +30,7 @@ import java.util.Set;
  * - Node and relationship property references.
  * - Variable-to-variable comparisons.
  * - Integer, decimal, string and boolean literals.
- * - Logical AND and OR.
+ * - Logical AND, OR and NOT.
  * - Arithmetic expressions represented in the AST.
  *
  * Logical OR is treated as a boolean filter using once/1.
@@ -95,6 +94,23 @@ public final class PrologWhereGoalBuilder {
 
         if (expression instanceof BooleanLiteralExpression literal) {
             return literal.value() ? "true" : "fail";
+        }
+
+        if (expression instanceof UnaryExpression unary) {
+
+            if (unary.operator() != UnaryOperator.NOT) {
+                throw unsupported(
+                        "Unary operator: " + unary.operator()
+                );
+            }
+
+            String operandGoal = compileCondition(
+                    unary.operand(),
+                    symbols,
+                    matchedVariables
+            );
+
+            return "\\+ (" + operandGoal + ")";
         }
 
         if (!(expression instanceof BinaryExpression binary)) {

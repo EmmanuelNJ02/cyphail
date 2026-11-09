@@ -1,4 +1,3 @@
-
 package cr.ac.una.eif400.cyphail.compiler.codegen;
 
 import cr.ac.una.eif400.cyphail.ast.Query;
@@ -111,7 +110,7 @@ class PrologSetMqiLiveIT {
     ) throws Exception {
 
         PrologResult result =
-                broker.execute(goal);
+                broker.execute(goal, 5);
 
         PrologResult.Success success =
                 assertInstanceOf(
